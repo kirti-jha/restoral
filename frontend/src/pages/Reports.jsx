@@ -32,12 +32,17 @@ export default function Reports() {
   if (user.role === 'ADMIN') {
     reportTabs.push({ id: 'super', label: 'Super Distributor Report', icon: Users });
   }
+  if (['ADMIN', 'SUPER'].includes(user.role)) {
+    reportTabs.push({ id: 'fund_added', label: 'Add Funds History', icon: ArrowUpRight });
+  }
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ ...filters, type: activeTab });
-      const endpoint = activeTab === 'ledger' ? '/reports/ledger' : `/reports/general?${params.toString()}`;
+      const endpoint = (activeTab === 'ledger' || activeTab === 'fund_added') 
+        ? `/reports/ledger?${params.toString()}` 
+        : `/reports/general?${params.toString()}`;
       const { data: res } = await api.get(endpoint);
       if (res.success) {
         setData(res.requests || res.transactions || []);
@@ -54,12 +59,13 @@ export default function Reports() {
   }, [activeTab, filters.from, filters.to, filters.status, filters.userId]);
 
   const renderTable = () => {
-    if (activeTab === 'ledger') {
+    if (activeTab === 'ledger' || activeTab === 'fund_added') {
       return (
         <table className="data-table">
           <thead>
             <tr>
               <th>Date</th>
+              {activeTab === 'fund_added' && <th>Admin/Super</th>}
               <th>Description</th>
               <th>Type</th>
               <th>Amount</th>
@@ -70,6 +76,14 @@ export default function Reports() {
             {data.map(txn => (
               <tr key={txn.id}>
                 <td className="text-xs text-gray-500">{new Date(txn.createdAt).toLocaleString()}</td>
+                {activeTab === 'fund_added' && (
+                  <td>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-xs">{txn.receiver?.profile?.ownerName || txn.receiver?.email}</span>
+                      <span className="text-[10px] text-gray-400">{txn.receiver?.role}</span>
+                    </div>
+                  </td>
+                )}
                 <td><span className="font-medium text-sm">{txn.description}</span></td>
                 <td><span className={`badge ${txn.type === 'CREDIT' ? 'badge-success' : 'badge-danger'}`}>{txn.type}</span></td>
                 <td className={txn.type === 'CREDIT' ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>

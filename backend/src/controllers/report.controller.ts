@@ -176,7 +176,9 @@ export const getLedger = async (req: AuthRequest, res: Response) => {
   const limit = (req.query.limit as string) || '20';
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const take = parseInt(limit);
-  const where: any = req.user!.role === 'ADMIN'
+  const type = req.query.type as string | undefined;
+  
+  let where: any = req.user!.role === 'ADMIN'
     ? {}
     : {
         OR: [
@@ -184,11 +186,26 @@ export const getLedger = async (req: AuthRequest, res: Response) => {
           { senderId: req.user!.id, type: 'DEBIT' },
         ],
       };
+
+  if (type === 'fund_added') {
+    where = {
+      type: 'CREDIT',
+      description: { contains: 'Top-up', mode: 'insensitive' },
+      ...(req.user!.role !== 'ADMIN' ? { receiverId: req.user!.id } : {})
+    };
+  }
+
   if (from || to) {
     where.createdAt = {};
     if (from) where.createdAt.gte = new Date(from as string);
     if (to) where.createdAt.lte = new Date(to as string);
   }
+
+  const filterUserId = req.query.userId as string | undefined;
+  if (filterUserId && req.user!.role === 'ADMIN') {
+    where.receiverId = filterUserId;
+  }
+
   try {
     const [transactions, total] = await Promise.all([
       prisma.walletTransaction.findMany({

@@ -162,7 +162,8 @@ const getLedger = async (req, res) => {
     const limit = req.query.limit || '20';
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
-    const where = req.user.role === 'ADMIN'
+    const type = req.query.type;
+    let where = req.user.role === 'ADMIN'
         ? {}
         : {
             OR: [
@@ -170,12 +171,23 @@ const getLedger = async (req, res) => {
                 { senderId: req.user.id, type: 'DEBIT' },
             ],
         };
+    if (type === 'fund_added') {
+        where = {
+            type: 'CREDIT',
+            description: { contains: 'Top-up', mode: 'insensitive' },
+            ...(req.user.role !== 'ADMIN' ? { receiverId: req.user.id } : {})
+        };
+    }
     if (from || to) {
         where.createdAt = {};
         if (from)
             where.createdAt.gte = new Date(from);
         if (to)
             where.createdAt.lte = new Date(to);
+    }
+    const filterUserId = req.query.userId;
+    if (filterUserId && req.user.role === 'ADMIN') {
+        where.receiverId = filterUserId;
     }
     try {
         const [transactions, total] = await Promise.all([

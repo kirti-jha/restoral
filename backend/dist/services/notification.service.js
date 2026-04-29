@@ -26,7 +26,7 @@ exports.createNotification = createNotification;
 const createAdminNotification = async (title, message, type = 'INFO') => {
     try {
         const admins = await prisma_1.default.user.findMany({
-            where: { role: 'ADMIN' },
+            where: { role: { in: ['ADMIN', 'SUPER'] } },
             select: { id: true },
         });
         const notifications = admins.map((admin) => ({
@@ -69,7 +69,7 @@ exports.createNotificationsForUsers = createNotificationsForUsers;
 const notifyAdminsAndUser = async (userId, title, message, type = 'INFO') => {
     try {
         const admins = await prisma_1.default.user.findMany({
-            where: { role: 'ADMIN' },
+            where: { role: { in: ['ADMIN', 'SUPER'] } },
             select: { id: true },
         });
         return await (0, exports.createNotificationsForUsers)([userId, ...admins.map((admin) => admin.id)], title, message, type);
