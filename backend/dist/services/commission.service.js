@@ -309,11 +309,10 @@ async function buildChargeDistribution(userId, serviceType, amountInput) {
     if (beneficiaries.length === 0) {
         return [];
     }
-    const chain = [...context.ancestors].reverse().concat(context.user);
     const charges = await Promise.all(beneficiaries.map((_, index) => {
         const scopedAncestors = context.ancestors.slice(context.ancestors.length - 1 - index);
-        const targetUser = chain[index + 1];
-        return Promise.resolve(resolveChargeWithinAncestorScope(targetUser, scopedAncestors, serviceType, amount, context.defaults, context.overrides));
+        // ALWAYS use the original requester (context.user) to calculate the charge at this ancestor's level
+        return Promise.resolve(resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides));
     }));
     const shares = [];
     for (let index = 0; index < beneficiaries.length; index += 1) {

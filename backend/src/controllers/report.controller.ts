@@ -337,10 +337,8 @@ export const getCommissionReport = async (req: AuthRequest, res: Response) => {
       const filteredDistribution = req.user!.role === 'ADMIN'
           ? distribution
           : distribution.filter((entry: any) => {
-              const receiver = entry.receiver;
-              if (!receiver) return false;
-              if (receiver.id === req.user!.id) return true;
-              return allowedReceiverRoles.has(receiver.role);
+              if (entry.receiverId === req.user!.id) return true;
+              return false; // For now, non-admins only see their own commission
             });
 
       return {
@@ -349,7 +347,19 @@ export const getCommissionReport = async (req: AuthRequest, res: Response) => {
       };
     });
 
-    res.json({ success: true, requests: formattedRequests, total });
+    const userIds = new Set<string>();
+    requests.forEach(r => {
+      userIds.add(r.userId);
+      const dist = JSON.parse(r.chargeDistribution || '[]');
+      dist.forEach((entry: any) => userIds.add(entry.receiverId));
+    });
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: Array.from(userIds) } },
+      include: { profile: true }
+    });
+
+    res.json({ success: true, requests: formattedRequests, total, users });
   } catch {
     res.status(500).json({ success: false, message: 'Server error' });
   }
