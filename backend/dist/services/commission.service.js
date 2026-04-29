@@ -71,7 +71,7 @@ function resolveChargeWithinAncestorScope(user, scopedAncestors, serviceType, am
     const amountPaise = amount.mul(100).toDecimalPlaces(0).toNumber();
     const scopeIds = new Set(scopedAncestors.map((ancestor) => ancestor.id));
     const scopedDefaults = defaults.filter((row) => row.serviceType === serviceType && scopeIds.has(row.setById));
-    const scopedOverrides = overrides.filter((row) => row.serviceType === serviceType && scopeIds.has(row.setById));
+    const scopedOverrides = overrides.filter((row) => row.serviceType === serviceType && scopeIds.has(row.setById) && row.targetUserId === user.id);
     const row = selectResolvedRate(user, scopedAncestors, serviceType, amountPaise, scopedDefaults, scopedOverrides);
     if (!row) {
         return 0;
@@ -148,7 +148,7 @@ async function loadRateContext(userId, serviceTypes, options = {}) {
         prisma_1.default.userCommissionSetup.findMany({
             where: {
                 setById: { in: ancestorIds },
-                targetUserId: chain.user.id,
+                targetUserId: { in: [chain.user.id, ...ancestorIds] },
                 serviceType: { in: [...serviceTypes] },
                 isActive: true,
                 ...(options.excludeOverrideId ? { id: { not: options.excludeOverrideId } } : {}),
@@ -164,15 +164,17 @@ async function loadRateContext(userId, serviceTypes, options = {}) {
 }
 function selectResolvedRate(user, ancestors, serviceType, amountPaise, defaults, overrides) {
     for (const ancestor of ancestors) {
-        // Only charges explicitly set by the immediate parent for this user should apply.
-        if (ancestor.id !== user.parentId) {
-            continue;
-        }
+        // 1. Check for user-specific override from this ancestor
         const override = overrides.find((row) => row.setById === ancestor.id && row.serviceType === serviceType && matchesAmount(row, amountPaise));
-        if (override) {
+        if (override)
             return override;
-        }
-        return null;
+        // 2. Check for role-based default from this ancestor
+        const def = defaults.find((row) => row.setById === ancestor.id &&
+            row.serviceType === serviceType &&
+            row.applyOnRole === user.role &&
+            matchesAmount(row, amountPaise));
+        if (def)
+            return def;
     }
     return null;
 }
@@ -307,9 +309,11 @@ async function buildChargeDistribution(userId, serviceType, amountInput) {
     if (beneficiaries.length === 0) {
         return [];
     }
+    const chain = [...context.ancestors].reverse().concat(context.user);
     const charges = await Promise.all(beneficiaries.map((_, index) => {
         const scopedAncestors = context.ancestors.slice(context.ancestors.length - 1 - index);
-        return Promise.resolve(resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides));
+        const targetUser = chain[index + 1];
+        return Promise.resolve(resolveChargeWithinAncestorScope(targetUser, scopedAncestors, serviceType, amount, context.defaults, context.overrides));
     }));
     const shares = [];
     for (let index = 0; index < beneficiaries.length; index += 1) {

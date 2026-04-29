@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateWalletHold = exports.rejectKycRequest = exports.approveKycRequest = exports.getKycRequests = exports.getMyKycRequest = exports.submitKycRequest = exports.updateKycStatus = exports.updateProfile = exports.deleteUser = exports.updateUser = exports.toggleUserStatus = exports.getUserById = exports.searchUsers = exports.getUsers = exports.createUser = void 0;
+exports.addAdminFunds = exports.updateWalletHold = exports.rejectKycRequest = exports.approveKycRequest = exports.getKycRequests = exports.getMyKycRequest = exports.submitKycRequest = exports.updateKycStatus = exports.updateProfile = exports.deleteUser = exports.updateUser = exports.toggleUserStatus = exports.getUserById = exports.searchUsers = exports.getUsers = exports.createUser = void 0;
 const client_1 = require("@prisma/client");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
@@ -670,3 +670,41 @@ const updateWalletHold = async (req, res) => {
     }
 };
 exports.updateWalletHold = updateWalletHold;
+const addAdminFunds = async (req, res) => {
+    const { amount, remark } = req.body;
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPER') {
+        res.status(403).json({ success: false, message: 'Only Admin or Super can perform this action' });
+        return;
+    }
+    try {
+        const grossAmount = new client_1.Prisma.Decimal(amount || 0);
+        if (grossAmount.lte(0)) {
+            res.status(400).json({ success: false, message: 'Amount must be greater than zero' });
+            return;
+        }
+        const updatedWallet = await prisma_1.default.wallet.upsert({
+            where: { userId: req.user.id },
+            update: { balance: { increment: grossAmount } },
+            create: {
+                userId: req.user.id,
+                balance: grossAmount,
+            },
+        });
+        await prisma_1.default.walletTransaction.create({
+            data: {
+                amount: grossAmount,
+                type: 'CREDIT',
+                description: remark || 'Admin System Top-up',
+                senderId: req.user.id,
+                receiverId: req.user.id,
+                receiverBalAfter: updatedWallet.balance,
+            },
+        });
+        res.json({ success: true, balance: updatedWallet.balance });
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+exports.addAdminFunds = addAdminFunds;

@@ -6,7 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getCommissionReport = exports.getReport = exports.getLedger = exports.getDashboardStats = void 0;
 const client_1 = require("@prisma/client");
 const prisma_1 = __importDefault(require("../lib/prisma"));
-const userHierarchy_service_1 = require("../services/userHierarchy.service");
 const getDashboardStats = async (req, res) => {
     const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER';
     try {
@@ -38,8 +37,8 @@ const getDashboardStats = async (req, res) => {
         let totalDebit = 0;
         let netProfit = 0;
         let totalCharges = 0;
+        let totalCommissionEarned = 0;
         if (isAdmin) {
-            // For Admin: Credit = Pay In (Fund Requests), Debit = Pay Out (Payouts)
             const payInStats = await prisma_1.default.serviceRequest.aggregate({
                 _sum: { amount: true, chargeAmount: true },
                 where: { serviceType: 'FUND_REQUEST', status: 'SUCCESS', createdAt: { gte: startTime, lte: endTime } }
@@ -58,18 +57,19 @@ const getDashboardStats = async (req, res) => {
             });
             totalCredit = toNum(payInStats._sum.amount);
             totalDebit = toNum(payOutStats._sum.amount);
-            netProfit = toNum(commissionStats._sum.amount);
+            totalCommissionEarned = toNum(commissionStats._sum.amount);
             totalCharges = toNum(payInStats._sum.chargeAmount) + toNum(payOutStats._sum.chargeAmount);
+            netProfit = totalCharges + totalCommissionEarned;
         }
         else {
-            // For Users: Standard Wallet View
-            const [creditStats, debitStats, chargeStats] = await Promise.all([
+            const [creditStats, debitStats, chargeStats, commissionStats] = await Promise.all([
                 prisma_1.default.walletTransaction.aggregate({
                     _sum: { amount: true },
                     where: {
                         type: 'CREDIT',
                         receiverId: req.user.id,
-                        createdAt: { gte: startTime, lte: endTime }
+                        createdAt: { gte: startTime, lte: endTime },
+                        NOT: { description: { contains: 'Commission', mode: 'insensitive' } }
                     }
                 }),
                 prisma_1.default.walletTransaction.aggregate({
@@ -97,14 +97,23 @@ const getDashboardStats = async (req, res) => {
                             { description: { contains: 'Fee', mode: 'insensitive' } }
                         ]
                     }
+                }),
+                prisma_1.default.walletTransaction.aggregate({
+                    _sum: { amount: true },
+                    where: {
+                        type: 'CREDIT',
+                        receiverId: req.user.id,
+                        createdAt: { gte: startTime, lte: endTime },
+                        description: { contains: 'Commission', mode: 'insensitive' }
+                    }
                 })
             ]);
             totalCredit = toNum(creditStats._sum.amount);
             totalDebit = toNum(debitStats._sum.amount);
             totalCharges = toNum(chargeStats._sum.amount);
-            netProfit = totalCredit - totalDebit - totalCharges;
+            totalCommissionEarned = toNum(commissionStats._sum.amount);
+            netProfit = totalCommissionEarned - totalCharges;
         }
-        // Get daily stats for the chart
         const dailyStats = await prisma_1.default.$queryRaw `
       SELECT 
         DATE_TRUNC('day', "createdAt") as date,
@@ -117,7 +126,6 @@ const getDashboardStats = async (req, res) => {
       GROUP BY 1
       ORDER BY 1 ASC
     `;
-        // Map to a format Recharts likes
         const chartData = dailyStats.map(d => ({
             name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             revenue: d.volume,
@@ -132,6 +140,7 @@ const getDashboardStats = async (req, res) => {
                 totalCredit,
                 totalDebit,
                 totalCharges,
+                totalCommissionEarned,
                 netProfit,
                 pendingFundRequests,
                 pendingPayouts,
@@ -258,84 +267,62 @@ const getReport = async (req, res) => {
     }
 };
 exports.getReport = getReport;
-const REPORT_RECEIVER_SCOPE = {
-    ADMIN: ['ADMIN', 'SUPER', 'DISTRIBUTOR', 'RETAILER'],
-    SUPER: ['SUPER', 'DISTRIBUTOR'],
-    DISTRIBUTOR: ['DISTRIBUTOR'],
-    RETAILER: ['RETAILER'],
-};
 const getCommissionReport = async (req, res) => {
-    const page = parseInt(req.query.page || '1');
-    const limit = parseInt(req.query.limit || '20');
-    const skip = (page - 1) * limit;
+    const from = req.query.from;
+    const to = req.query.to;
+    const page = req.query.page || '1';
+    const limit = req.query.limit || '20';
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+    const REPORT_RECEIVER_SCOPE = {
+        ADMIN: ['ADMIN', 'SUPER', 'DISTRIBUTOR', 'RETAILER'],
+        SUPER: ['SUPER', 'DISTRIBUTOR'],
+        DISTRIBUTOR: ['DISTRIBUTOR'],
+        RETAILER: ['RETAILER'],
+    };
     const where = {
         status: 'SUCCESS',
         chargeAmount: { gt: 0 },
     };
-    let descendantIds = [];
-    if (req.user.role !== 'ADMIN') {
-        const hierarchyUsers = await (0, userHierarchy_service_1.fetchHierarchyUsers)();
-        descendantIds = (0, userHierarchy_service_1.getDescendantIds)(req.user.id, hierarchyUsers);
-        where.userId = { in: [req.user.id, ...descendantIds] };
+    if (from || to) {
+        where.createdAt = {};
+        if (from)
+            where.createdAt.gte = new Date(from);
+        if (to)
+            where.createdAt.lte = new Date(to);
     }
     try {
         const [requests, total] = await Promise.all([
             prisma_1.default.serviceRequest.findMany({
                 where,
                 skip,
-                take: limit,
+                take,
                 orderBy: { createdAt: 'desc' },
                 include: { user: { include: { profile: true } } },
             }),
             prisma_1.default.serviceRequest.count({ where }),
         ]);
-        const hierarchyUsers = await (0, userHierarchy_service_1.fetchHierarchyUsers)();
-        const userMap = new Map(hierarchyUsers.map((u) => [u.id, u]));
-        const visibleUserIds = new Set([String(req.user.id), ...descendantIds.map((id) => String(id))]);
-        const allowedReceiverRoles = new Set(REPORT_RECEIVER_SCOPE[req.user.role] || []);
-        const receiverIds = new Set();
-        const filteredRequests = requests.map((r) => {
-            if (!r.chargeDistribution)
-                return r;
-            try {
-                const distribution = JSON.parse(r.chargeDistribution);
-                const filteredDist = req.user.role === 'ADMIN'
-                    ? distribution
-                    : distribution.filter((entry) => {
-                        const receiverId = String(entry.receiverId || '');
-                        const receiver = userMap.get(receiverId);
-                        if (!receiver || !visibleUserIds.has(receiverId)) {
-                            return false;
-                        }
-                        return allowedReceiverRoles.has(receiver.role);
-                    });
-                filteredDist.forEach((entry) => {
-                    if (entry.receiverId)
-                        receiverIds.add(String(entry.receiverId));
+        const formattedRequests = requests.map((request) => {
+            const distribution = JSON.parse(request.chargeDistribution || '[]');
+            const allowedReceiverRoles = new Set(REPORT_RECEIVER_SCOPE[req.user.role] || []);
+            const filteredDistribution = req.user.role === 'ADMIN'
+                ? distribution
+                : distribution.filter((entry) => {
+                    const receiver = entry.receiver;
+                    if (!receiver)
+                        return false;
+                    if (receiver.id === req.user.id)
+                        return true;
+                    return allowedReceiverRoles.has(receiver.role);
                 });
-                return {
-                    ...r,
-                    chargeDistribution: JSON.stringify(filteredDist)
-                };
-            }
-            catch (e) {
-                console.error('[CommissionReport] Parse error:', e);
-                return r;
-            }
+            return {
+                ...request,
+                chargeDistribution: JSON.stringify(filteredDistribution),
+            };
         });
-        const receivers = await prisma_1.default.user.findMany({
-            where: { id: { in: Array.from(receiverIds) } },
-            select: {
-                id: true,
-                email: true,
-                role: true,
-                profile: { select: { ownerName: true, shopName: true } }
-            }
-        });
-        res.json({ success: true, requests: filteredRequests, total, users: receivers });
+        res.json({ success: true, requests: formattedRequests, total });
     }
-    catch (err) {
-        console.error(err);
+    catch {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };

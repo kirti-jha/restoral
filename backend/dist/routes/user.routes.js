@@ -57,5 +57,6 @@ router.post('/:id/login-as', (0, auth_1.authorize)('ADMIN', 'SUPER', 'DISTRIBUTO
 });
 // router.patch('/:id/kyc', authorize('ADMIN'), updateKycStatus);
 router.patch('/:id/wallet-hold', (0, auth_1.authorize)('ADMIN', 'SUPER', 'DISTRIBUTOR'), user_controller_1.updateWalletHold);
+router.post('/admin/add-funds', (0, auth_1.authorize)('ADMIN', 'SUPER'), user_controller_1.addAdminFunds);
 router.delete('/:id', (0, auth_1.authorize)('ADMIN', 'SUPER', 'DISTRIBUTOR'), user_controller_1.deleteUser);
 exports.default = router;

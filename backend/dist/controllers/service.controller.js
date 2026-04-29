@@ -216,8 +216,13 @@ const approveFundRequest = async (req, res) => {
             return;
         }
         const shares = await (0, commission_service_1.buildChargeDistribution)(request.userId, 'FUND_REQUEST', grossAmount);
-        const approver = await prisma_1.default.user.findUnique({ where: { id: req.user.id } });
+        const approver = await prisma_1.default.user.findUnique({ where: { id: req.user.id }, include: { wallet: true } });
         const approverLabel = approver?.email || 'Admin';
+        // Balance check for approver
+        if (!approver?.wallet || approver.wallet.balance.lessThan(grossAmount)) {
+            res.status(400).json({ success: false, message: 'Insufficient balance in your wallet to approve this request' });
+            return;
+        }
         await prisma_1.default.$transaction(async (tx) => {
             const updated = await tx.serviceRequest.updateMany({
                 where: { id, status: 'PENDING' },
@@ -233,7 +238,26 @@ const approveFundRequest = async (req, res) => {
             if (updated.count === 0) {
                 throw new Error('This request has already been processed or is no longer pending.');
             }
-            await creditWallet(tx, request.userId, grossAmount.toNumber(), `Wallet Top-up | Fund Request approved by ${approverLabel}`, request.userId, id);
+            // 1. Debit the Approver
+            const updatedApproverWallet = await tx.wallet.update({
+                where: { userId: req.user.id },
+                data: { balance: { decrement: grossAmount } },
+            });
+            await tx.walletTransaction.create({
+                data: {
+                    amount: grossAmount,
+                    type: 'DEBIT',
+                    description: `Fund Request Approved | Sent to ${request.userId}`,
+                    senderId: req.user.id,
+                    receiverId: req.user.id,
+                    senderBalAfter: updatedApproverWallet.balance,
+                    receiverBalAfter: updatedApproverWallet.balance,
+                    serviceRequestId: id,
+                },
+            });
+            // 2. Credit the Requester
+            await creditWallet(tx, request.userId, grossAmount.toNumber(), `Wallet Top-up | Fund Request approved by ${approverLabel}`, req.user.id, // Sender is the Approver
+            id);
             if (charge.toNumber() > 0) {
                 const updatedWallet = await tx.wallet.update({
                     where: { userId: request.userId },
