@@ -371,9 +371,95 @@ function BankAccountModal({ isOpen, onClose, onSaved, initialData }) {
   );
 }
 
+function AdminAddFundsModal({ isOpen, onClose, onSaved }) {
+  const [formData, setFormData] = useState({
+    amount: '',
+    remark: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setError('');
+    setLoading(false);
+    setFormData({ amount: '', remark: '' });
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await api.post('/users/admin/add-funds', formData);
+      if (response.data.success) {
+        onSaved();
+        onClose();
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to add funds');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-md p-6">
+        <h2 className="text-xl font-bold mb-1">Add System Funds</h2>
+        <p className="text-sm text-gray-500 mb-5">Manually add funds to your admin wallet balance.</p>
+
+        {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-4">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Amount</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              required
+              placeholder="0.00"
+              value={formData.amount}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                  setFormData({ ...formData, amount: val });
+                }
+              }}
+              className="w-full py-3 px-4 bg-gray-50/50 focus:bg-white border-2 border-transparent focus:border-primary rounded-xl font-bold text-sm outline-none transition-all"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">Remark</label>
+            <textarea
+              rows="3"
+              value={formData.remark}
+              onChange={(e) => setFormData({ ...formData, remark: e.target.value })}
+              placeholder="e.g. Initial system balance"
+              className="w-full py-3 px-4 bg-gray-50/50 focus:bg-white border-2 border-transparent focus:border-primary rounded-xl font-bold text-sm outline-none transition-all"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="btn btn-outline" disabled={loading}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Adding...' : 'Add Funds'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Wallet() {
   const { user, refreshUser } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER';
   const kycVerified = isAdmin || user?.kycStatus === 'VERIFIED';
   const canCreateRequest = !isAdmin && kycVerified;
   const sectionTabs = [
@@ -392,6 +478,7 @@ export default function Wallet() {
   const [requestFilter, setRequestFilter] = useState('PENDING');
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [isAddFundsModalOpen, setIsAddFundsModalOpen] = useState(false);
   const [currentBankAccount, setCurrentBankAccount] = useState(null);
   const [activeSection, setActiveSection] = useState('requests');
   const [error, setError] = useState('');
@@ -532,16 +619,25 @@ export default function Wallet() {
           )}
 
           {isAdmin && (
-            <button
-              onClick={() => {
-                setCurrentBankAccount(null);
-                setIsBankModalOpen(true);
-              }}
-              className="btn btn-primary shadow-lg shadow-blue-200"
-              type="button"
-            >
-              <Building2 size={18} /> Add Company Bank Account
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsAddFundsModalOpen(true)}
+                className="btn btn-outline shadow-md"
+                type="button"
+              >
+                <Plus size={18} /> Add Funds
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentBankAccount(null);
+                  setIsBankModalOpen(true);
+                }}
+                className="btn btn-primary shadow-lg shadow-blue-200"
+                type="button"
+              >
+                <Building2 size={18} /> Add Company Bank Account
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -830,6 +926,22 @@ export default function Wallet() {
           </div>
         </div>
       )}
+
+      <BankAccountModal
+        isOpen={isBankModalOpen}
+        onClose={() => setIsBankModalOpen(false)}
+        onSaved={fetchAll}
+        initialData={currentBankAccount}
+      />
+
+      <AdminAddFundsModal
+        isOpen={isAddFundsModalOpen}
+        onClose={() => setIsAddFundsModalOpen(false)}
+        onSaved={() => {
+          refreshUser();
+          fetchAll();
+        }}
+      />
     </div>
   );
 }

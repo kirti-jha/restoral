@@ -13,6 +13,8 @@ export default function Dashboard() {
     totalTransactions: 0,
     totalCredit: 0,
     totalDebit: 0,
+    totalCharges: 0,
+    totalCommissionEarned: 0,
     netProfit: 0,
     pendingFundRequests: 0,
     pendingPayouts: 0,
@@ -159,18 +161,34 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Charges Deducted */}
+        {/* Charges Credited (Commissions for non-admin, Total charges for admin) */}
         <div className="card group hover:shadow-md transition-all duration-300 relative overflow-hidden bg-white border border-gray-100">
           <div className="p-4 md:p-6 relative">
             <div className="flex justify-between items-start mb-4">
-              <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
-                <TrendingDown size={20} />
+              <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                <TrendingUp size={20} />
               </div>
+              <div className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">Period</div>
             </div>
-            <h3 className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">Charges Deducted</h3>
-            <div className="text-xl md:text-2xl font-black text-rose-600 mt-1">₹ {Number(stats.totalCharges || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+            <h3 className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">Charges Credited</h3>
+            <div className="text-xl md:text-2xl font-black text-emerald-600 mt-1">₹ {Number((user?.role === 'ADMIN' || user?.role === 'SUPER') ? stats.totalCharges : stats.totalCommissionEarned || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
           </div>
         </div>
+
+        {/* Charges Deducted (Only for non-admin) */}
+        {user?.role !== 'ADMIN' && user?.role !== 'SUPER' && (
+          <div className="card group hover:shadow-md transition-all duration-300 relative overflow-hidden bg-white border border-gray-100">
+            <div className="p-4 md:p-6 relative">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
+                  <TrendingDown size={20} />
+                </div>
+              </div>
+              <h3 className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">Charges Deducted</h3>
+              <div className="text-xl md:text-2xl font-black text-rose-600 mt-1">₹ {Number(stats.totalCharges || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+            </div>
+          </div>
+        )}
 
         {/* Total Credit */}
         <div className="card group hover:shadow-md transition-all duration-300 relative overflow-hidden bg-white border border-gray-100">

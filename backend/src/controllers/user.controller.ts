@@ -818,3 +818,45 @@ export const updateWalletHold = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+export const addAdminFunds = async (req: AuthRequest, res: Response) => {
+  const { amount, remark } = req.body;
+
+  if (req.user!.role !== 'ADMIN' && req.user!.role !== 'SUPER') {
+    res.status(403).json({ success: false, message: 'Only Admin or Super can perform this action' });
+    return;
+  }
+
+  try {
+    const grossAmount = new Prisma.Decimal(amount || 0);
+    if (grossAmount.lte(0)) {
+      res.status(400).json({ success: false, message: 'Amount must be greater than zero' });
+      return;
+    }
+
+    const updatedWallet = await prisma.wallet.upsert({
+      where: { userId: req.user!.id },
+      update: { balance: { increment: grossAmount } },
+      create: {
+        userId: req.user!.id,
+        balance: grossAmount,
+      },
+    });
+
+    await prisma.walletTransaction.create({
+      data: {
+        amount: grossAmount,
+        type: 'CREDIT',
+        description: remark || 'Admin System Top-up',
+        senderId: req.user!.id,
+        receiverId: req.user!.id,
+        receiverBalAfter: updatedWallet.balance,
+      },
+    });
+
+    res.json({ success: true, balance: updatedWallet.balance });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

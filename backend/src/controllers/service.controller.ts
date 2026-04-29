@@ -256,14 +256,58 @@ export const approveFundRequest = async (req: AuthRequest, res: Response) => {
     const charge = new Prisma.Decimal(await resolveCharge(request.userId, 'FUND_REQUEST', toNumberAmount(request.amount)));
     const creditedAmount = grossAmount.minus(charge).toDecimalPlaces(2);
 
+
+    res.status(201).json({ success: true, request });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+export const approveFundRequest = async (req: AuthRequest, res: Response) => {
+  const id = req.params.id as string;
+  try {
+    const request = await prisma.serviceRequest.findUnique({
+      where: { id },
+      include: {
+        companyBankAccount: true,
+      },
+    });
+    if (!request || request.status !== 'PENDING') {
+      res.status(400).json({ success: false, message: 'Invalid request' });
+      return;
+    }
+
+    // Hierarchy Check
+    const hierarchyUsers = await fetchHierarchyUsers();
+    if (!canManageTarget(req.user!, request.userId, hierarchyUsers)) {
+      res.status(403).json({ success: false, message: 'Forbidden: You cannot manage this user hierarchy' });
+      return;
+    }
+
+    const grossAmount = new Prisma.Decimal(request.amount || 0);
+    if (grossAmount.lte(0)) {
+      res.status(400).json({ success: false, message: 'Request amount must be greater than zero' });
+      return;
+    }
+
+    const charge = new Prisma.Decimal(await resolveCharge(request.userId, 'FUND_REQUEST', toNumberAmount(request.amount)));
+    const creditedAmount = grossAmount.minus(charge).toDecimalPlaces(2);
+
     if (creditedAmount.lte(0)) {
       res.status(400).json({ success: false, message: 'Resolved charge cannot exceed the request amount' });
       return;
     }
 
     const shares = await buildChargeDistribution(request.userId, 'FUND_REQUEST', grossAmount);
-    const approver = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    const approver = await prisma.user.findUnique({ where: { id: req.user!.id }, include: { wallet: true } });
     const approverLabel = approver?.email || 'Admin';
+
+    // Balance check for approver
+    if (!approver?.wallet || approver.wallet.balance.lessThan(grossAmount)) {
+      res.status(400).json({ success: false, message: 'Insufficient balance in your wallet to approve this request' });
+      return;
+    }
 
     await prisma.$transaction(async (tx) => {
       const updated = await tx.serviceRequest.updateMany({
@@ -282,12 +326,31 @@ export const approveFundRequest = async (req: AuthRequest, res: Response) => {
         throw new Error('This request has already been processed or is no longer pending.');
       }
 
+      // 1. Debit the Approver
+      const updatedApproverWallet = await tx.wallet.update({
+        where: { userId: req.user!.id },
+        data: { balance: { decrement: grossAmount } },
+      });
+
+      await tx.walletTransaction.create({
+        data: {
+          amount: grossAmount,
+          type: 'DEBIT',
+          description: `Fund Request Approved | Sent to ${request.userId}`,
+          senderId: req.user!.id,
+          receiverId: request.userId,
+          senderBalAfter: updatedApproverWallet.balance,
+          serviceRequestId: id,
+        },
+      });
+
+      // 2. Credit the Requester
       await creditWallet(
         tx,
         request.userId,
         grossAmount.toNumber(),
         `Wallet Top-up | Fund Request approved by ${approverLabel}`,
-        request.userId,
+        req.user!.id, // Sender is the Approver
         id
       );
 

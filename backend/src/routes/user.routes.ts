@@ -18,6 +18,7 @@ import {
   submitKycRequest,
   updateWalletHold,
   searchUsers,
+  addAdminFunds,
 } from '../controllers/user.controller';
 import { loginAs } from '../controllers/auth.controller';
 import { authenticate, authorize } from '../middleware/auth';
@@ -79,6 +80,7 @@ router.post('/:id/login-as', authorize('ADMIN', 'SUPER', 'DISTRIBUTOR'), (req, r
 });
 // router.patch('/:id/kyc', authorize('ADMIN'), updateKycStatus);
 router.patch('/:id/wallet-hold', authorize('ADMIN', 'SUPER', 'DISTRIBUTOR'), updateWalletHold);
+router.post('/admin/add-funds', authorize('ADMIN', 'SUPER'), addAdminFunds);
 router.delete('/:id', authorize('ADMIN', 'SUPER', 'DISTRIBUTOR'), deleteUser);
 
 export default router;
