@@ -284,35 +284,39 @@ function selectResolvedRate(
   overrides: NormalizedOverrideRow[],
   fullChainContext?: ChainUser[]
 ) {
-  // The full chain from the end-user up to the top ancestor.
-  // This is used to allow rates to "fall back" to parent roles/users.
+  // Use provided context or build from user/ancestors
   const chain = fullChainContext || [user, ...ancestors];
 
-  for (let i = 0; i < ancestors.length; i += 1) {
-    const ancestor = ancestors[i];
-    // Find where this ancestor sits in the full chain to know who is "below" them.
-    const ancestorIndex = chain.findIndex((u) => u.id === ancestor.id);
-    const subChain = ancestorIndex > 0 ? chain.slice(0, ancestorIndex) : [user];
+  for (const ancestor of ancestors) {
+    const ancestorId = String(ancestor.id);
+    
+    // Find who is below this ancestor in the chain to check for hierarchical rates
+    const ancestorIndex = chain.findIndex((u) => String(u.id) === ancestorId);
+    
+    // The targets are everyone in the chain from the end-user up to this ancestor.
+    // We check them in order from nearest to end-user (Retailer) to most general.
+    const targets = ancestorIndex > 0 ? chain.slice(0, ancestorIndex) : [user];
 
-    // 1. Check for user-specific overrides from this ancestor (nearest to end-user wins)
-    for (const targetUser of subChain) {
+    // 1. Check for overrides from this ancestor for anyone in the sub-chain
+    for (const target of targets) {
+      const targetId = String(target.id);
       const override = overrides.find(
         (row) =>
-          row.setById === ancestor.id &&
-          row.targetUserId === targetUser.id &&
+          String(row.setById) === ancestorId &&
+          String(row.targetUserId) === targetId &&
           row.serviceType === serviceType &&
           matchesAmount(row, amountPaise)
       );
       if (override) return override;
     }
 
-    // 2. Check for role-based defaults from this ancestor (nearest role wins)
-    for (const targetUser of subChain) {
+    // 2. Check for defaults from this ancestor for any roles in the sub-chain
+    for (const target of targets) {
       const def = defaults.find(
         (row) =>
-          row.setById === ancestor.id &&
+          String(row.setById) === ancestorId &&
           row.serviceType === serviceType &&
-          row.applyOnRole === targetUser.role &&
+          row.applyOnRole === target.role &&
           matchesAmount(row, amountPaise)
       );
       if (def) return def;
