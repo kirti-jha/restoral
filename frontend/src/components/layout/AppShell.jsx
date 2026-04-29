@@ -15,10 +15,9 @@ import {
   ShieldCheck,
   Banknote,
   Coins,
-  Bell,
 } from 'lucide-react';
 import api from '../../lib/api';
-import NotificationPanel from '../notifications/NotificationPanel';
+// import NotificationPanel from '../notifications/NotificationPanel';
 import './AppShell.css';
 
 export default function AppShell() {
@@ -26,9 +25,8 @@ export default function AppShell() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const normalizedPath = location.pathname;
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-
+  // Notifications disabled for now
+  /*
   const fetchUnreadCount = async () => {
     try {
       const { data } = await api.get('/notifications');
@@ -43,10 +41,11 @@ export default function AppShell() {
   useEffect(() => {
     if (user) {
       fetchUnreadCount();
-      const interval = setInterval(fetchUnreadCount, 10000); // Check every 10 seconds
+      const interval = setInterval(fetchUnreadCount, 10000); 
       return () => clearInterval(interval);
     }
   }, [user]);
+  */
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -156,27 +155,6 @@ export default function AppShell() {
             </span>
           </div>
 
-          <div className="ml-auto flex items-center gap-4">
-            <div className="relative">
-              <button 
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors relative text-gray-600"
-              >
-                <Bell size={20} />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </button>
-              {isNotificationsOpen && (
-                <NotificationPanel 
-                  onClose={() => setIsNotificationsOpen(false)} 
-                  onReadUpdate={setUnreadCount}
-                />
-              )}
-            </div>
-          </div>
         </header>
 
         <div className="page-container animate-fade-in">
