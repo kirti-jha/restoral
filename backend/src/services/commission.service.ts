@@ -277,20 +277,21 @@ function selectResolvedRate(
   overrides: NormalizedOverrideRow[]
 ) {
   for (const ancestor of ancestors) {
-    // Only charges explicitly set by the immediate parent for this user should apply.
-    if (ancestor.id !== user.parentId) {
-      continue;
-    }
-
+    // 1. Check for user-specific override from this ancestor
     const override = overrides.find(
       (row) => row.setById === ancestor.id && row.serviceType === serviceType && matchesAmount(row, amountPaise)
     );
+    if (override) return override;
 
-    if (override) {
-      return override;
-    }
-
-    return null;
+    // 2. Check for role-based default from this ancestor
+    const def = defaults.find(
+      (row) =>
+        row.setById === ancestor.id &&
+        row.serviceType === serviceType &&
+        row.applyOnRole === user.role &&
+        matchesAmount(row, amountPaise)
+    );
+    if (def) return def;
   }
 
   return null;
