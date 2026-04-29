@@ -281,7 +281,11 @@ function selectResolvedRate(
   for (const ancestor of ancestors) {
     // 1. Check for user-specific override from this ancestor
     const override = overrides.find(
-      (row) => row.setById === ancestor.id && row.serviceType === serviceType && matchesAmount(row, amountPaise)
+      (row) =>
+        row.setById === ancestor.id &&
+        row.targetUserId === user.id &&
+        row.serviceType === serviceType &&
+        matchesAmount(row, amountPaise)
     );
     if (override) return override;
 
@@ -552,9 +556,18 @@ export async function buildChargeDistribution(
   const charges = await Promise.all(
     beneficiaries.map((_, index) => {
       const scopedAncestors = context.ancestors.slice(context.ancestors.length - 1 - index);
-      // ALWAYS use the original requester (context.user) to calculate the charge at this ancestor's level
+      // Each ancestor charges the person immediately below them in the chain.
+      const targetUser = index === beneficiaries.length - 1 ? context.user : beneficiaries[index + 1];
+
       return Promise.resolve(
-        resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides)
+        resolveChargeWithinAncestorScope(
+          targetUser,
+          scopedAncestors,
+          serviceType,
+          amount,
+          context.defaults,
+          context.overrides
+        )
       );
     })
   );
