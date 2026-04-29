@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Edit2, Plus, ShieldCheck, Trash2, UserPlus, User, X } from 'lucide-react';
+import { Edit2, Plus, ShieldCheck, Trash2, UserPlus, User, X, Loader2 } from 'lucide-react';
 import UserSearch from '../components/common/UserSearch';
 
 const MANAGER_ROLES = ['ADMIN', 'SUPER', 'DISTRIBUTOR'];
@@ -528,6 +528,7 @@ function UserOverrideModal({ isOpen, onClose, onSaved, initialData, targets }) {
 export default function Commissions() {
   const { user } = useAuth();
   const canManageRates = MANAGER_ROLES.includes(user.role);
+  const showMyCharges = user.role !== 'ADMIN';
   const allowedRoles = getAssignableRoles(user.role);
 
   const [defaultRates, setDefaultRates] = useState([]);
@@ -537,15 +538,15 @@ export default function Commissions() {
   const [effectiveRates, setEffectiveRates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState(canManageRates ? 'defaults' : 'myCharges');
+  const [activeTab, setActiveTab] = useState(canManageRates || !showMyCharges ? 'defaults' : 'myCharges');
   const [isDefaultModalOpen, setIsDefaultModalOpen] = useState(false);
   const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
   const [currentDefaultRate, setCurrentDefaultRate] = useState(null);
   const [currentOverride, setCurrentOverride] = useState(null);
 
   useEffect(() => {
-    setActiveTab(canManageRates ? 'defaults' : 'myCharges');
-  }, [canManageRates]);
+    setActiveTab(canManageRates || !showMyCharges ? 'defaults' : 'myCharges');
+  }, [canManageRates, showMyCharges]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -660,7 +661,9 @@ export default function Commissions() {
         {canManageRates && (
           <TabButton active={activeTab === 'overrides'} label="User Overrides" onClick={() => setActiveTab('overrides')} />
         )}
-        <TabButton active={activeTab === 'myCharges'} label="My Charges" onClick={() => setActiveTab('myCharges')} />
+        {showMyCharges && (
+          <TabButton active={activeTab === 'myCharges'} label="My Charges" onClick={() => setActiveTab('myCharges')} />
+        )}
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-4">{error}</div>}
@@ -671,47 +674,6 @@ export default function Commissions() {
         <>
           {activeTab === 'defaults' && canManageRates && (
             <div className="space-y-6">
-              {inheritedDefaultRates.length > 0 && (
-                <div className="card">
-                  <div className="p-4 border-b bg-amber-50/30 flex items-center gap-3">
-                    <ShieldCheck size={18} className="text-amber-600" />
-                    <div>
-                      <h2 className="font-bold text-sm uppercase text-amber-800 tracking-wider">Inherited Default Rates</h2>
-                      <p className="text-xs text-amber-600">These rates are set by your upline and apply as a baseline for your children.</p>
-                    </div>
-                  </div>
-                  <div className="data-table-container border-none shadow-none rounded-none">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Service</th>
-                          <th>Apply On</th>
-                          <th>Set By</th>
-                          <th>Range</th>
-                          <th>Charge</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inheritedDefaultRates.map((rate) => (
-                          <tr key={rate.id} className="bg-amber-50/10">
-                            <td className="font-semibold">{SERVICE_LABELS[rate.serviceType] || rate.serviceType}</td>
-                            <td>{ROLE_LABELS[rate.applyOnRole] || rate.applyOnRole}</td>
-                            <td>
-                              <div className="text-xs">
-                                <div className="font-bold text-gray-700">{rate.setBy?.profile?.ownerName || rate.setBy?.email}</div>
-                                <div className="text-gray-400">({ROLE_LABELS[rate.setBy?.role]})</div>
-                              </div>
-                            </td>
-                            <td>{formatRange(rate.minAmount, rate.maxAmount)}</td>
-                            <td className="font-medium text-amber-600">{formatCharge(rate.commissionType, rate.commissionValue)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
               <div className="card">
                 <div className="p-4 border-b bg-gray-50/30">
                   <h2 className="font-bold text-sm uppercase text-gray-700 tracking-wider">My Custom Default Rates</h2>
@@ -857,44 +819,48 @@ export default function Commissions() {
             </div>
           )}
 
-          {activeTab === 'myCharges' && (
-            <div className="card">
-              <div className="p-5 border-b flex items-center gap-3">
-                <ShieldCheck size={18} className="text-emerald-600" />
-                <div>
-                  <h2 className="font-semibold">My Charges</h2>
-                  <p className="text-sm text-gray-500">These are the final slabs that currently apply to your account.</p>
-                </div>
-              </div>
-
-              <div className="data-table-container border-none shadow-none rounded-none">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Service</th>
-                      <th>Range</th>
-                      <th>Charge</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {effectiveRates.length === 0 ? (
-                      <tr>
-                        <td colSpan="3" className="text-center py-10 text-gray-400">
-                          No charge slabs are currently configured for your account.
-                        </td>
-                      </tr>
-                    ) : (
-                      effectiveRates.map((rate, index) => (
-                        <tr key={`${rate.serviceType}-${rate.minAmount}-${rate.maxAmount || 'max'}-${index}`}>
-                          <td className="font-semibold text-primary">{SERVICE_LABELS[rate.serviceType] || rate.serviceType}</td>
-                          <td>{formatRange(rate.minAmount, rate.maxAmount)}</td>
-                          <td className="font-medium text-emerald-600">{formatCharge(rate.commissionType, rate.commissionValue)}</td>
+          {showMyCharges && activeTab === 'myCharges' && (
+            <div className="space-y-6">
+              {inheritedDefaultRates.length > 0 && (
+                <div className="card">
+                  <div className="p-4 border-b bg-amber-50/30 flex items-center gap-3">
+                    <ShieldCheck size={18} className="text-amber-600" />
+                    <div>
+                      <h2 className="font-bold text-sm uppercase text-amber-800 tracking-wider">Inherited Default Rates</h2>
+                      <p className="text-xs text-amber-600">These are the default rates coming from your parent.</p>
+                    </div>
+                  </div>
+                  <div className="data-table-container border-none shadow-none rounded-none">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Service</th>
+                          <th>Apply On</th>
+                          <th>Set By</th>
+                          <th>Range</th>
+                          <th>Charge</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody>
+                        {inheritedDefaultRates.map((rate) => (
+                          <tr key={`my-inherited-${rate.id}`} className="bg-amber-50/10">
+                            <td className="font-semibold">{SERVICE_LABELS[rate.serviceType] || rate.serviceType}</td>
+                            <td>{ROLE_LABELS[rate.applyOnRole] || rate.applyOnRole}</td>
+                            <td>
+                              <div className="text-xs">
+                                <div className="font-bold text-gray-700">{rate.setBy?.profile?.ownerName || rate.setBy?.email}</div>
+                                <div className="text-gray-400">({ROLE_LABELS[rate.setBy?.role] || rate.setBy?.role})</div>
+                              </div>
+                            </td>
+                            <td>{formatRange(rate.minAmount, rate.maxAmount)}</td>
+                            <td className="font-medium text-amber-600">{formatCharge(rate.commissionType, rate.commissionValue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>

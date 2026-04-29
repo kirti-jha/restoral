@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Wallet as WalletIcon,
   XCircle,
+  Loader2,
 } from 'lucide-react';
 
 function formatAmount(value) {
