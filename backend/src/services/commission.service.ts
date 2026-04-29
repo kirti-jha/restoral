@@ -278,26 +278,35 @@ function selectResolvedRate(
   defaults: NormalizedDefaultRow[],
   overrides: NormalizedOverrideRow[]
 ) {
-  for (const ancestor of ancestors) {
-    // 1. Check for user-specific override from this ancestor
-    const override = overrides.find(
-      (row) =>
-        row.setById === ancestor.id &&
-        row.targetUserId === user.id &&
-        row.serviceType === serviceType &&
-        matchesAmount(row, amountPaise)
-    );
-    if (override) return override;
+  const fullChain = [user, ...ancestors];
 
-    // 2. Check for role-based default from this ancestor
-    const def = defaults.find(
-      (row) =>
-        row.setById === ancestor.id &&
-        row.serviceType === serviceType &&
-        row.applyOnRole === user.role &&
-        matchesAmount(row, amountPaise)
-    );
-    if (def) return def;
+  for (let i = ancestors.length - 1; i >= 0; i -= 1) {
+    const ancestor = ancestors[i];
+    const subChain = fullChain.slice(0, fullChain.length - 1 - i);
+
+    // 1. Check for user-specific overrides from this ancestor (nearest to end-user wins)
+    for (const targetUser of subChain) {
+      const override = overrides.find(
+        (row) =>
+          row.setById === ancestor.id &&
+          row.targetUserId === targetUser.id &&
+          row.serviceType === serviceType &&
+          matchesAmount(row, amountPaise)
+      );
+      if (override) return override;
+    }
+
+    // 2. Check for role-based defaults from this ancestor (nearest role wins)
+    for (const targetUser of subChain) {
+      const def = defaults.find(
+        (row) =>
+          row.setById === ancestor.id &&
+          row.serviceType === serviceType &&
+          row.applyOnRole === targetUser.role &&
+          matchesAmount(row, amountPaise)
+      );
+      if (def) return def;
+    }
   }
 
   return null;
@@ -556,18 +565,10 @@ export async function buildChargeDistribution(
   const charges = await Promise.all(
     beneficiaries.map((_, index) => {
       const scopedAncestors = context.ancestors.slice(context.ancestors.length - 1 - index);
-      // Each ancestor charges the person immediately below them in the chain.
-      const targetUser = index === beneficiaries.length - 1 ? context.user : beneficiaries[index + 1];
-
+      // Evaluates what this ancestor charges the original requester, 
+      // incorporating hierarchical fallbacks if specific rates for roles/users are missing.
       return Promise.resolve(
-        resolveChargeWithinAncestorScope(
-          targetUser,
-          scopedAncestors,
-          serviceType,
-          amount,
-          context.defaults,
-          context.overrides
-        )
+        resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides)
       );
     })
   );
