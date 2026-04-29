@@ -211,12 +211,17 @@ export default function BankVerify() {
           {isAdmin && (
             <div className="mt-3 flex items-center gap-2">
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
                 value={feeDraft}
-                onChange={(event) => setFeeDraft(event.target.value)}
-                className="py-2 px-3 text-sm"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFeeDraft(val);
+                  }
+                }}
+                className="py-2 px-3 text-sm max-w-[100px]"
               />
               <button className="btn btn-primary btn-sm" type="button" onClick={handleFeeSave} disabled={feeSaving}>
                 <Save size={14} />

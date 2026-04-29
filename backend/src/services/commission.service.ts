@@ -152,7 +152,9 @@ function resolveChargeWithinAncestorScope(
   const amountPaise = amount.mul(100).toDecimalPlaces(0).toNumber();
   const scopeIds = new Set(scopedAncestors.map((ancestor) => ancestor.id));
   const scopedDefaults = defaults.filter((row) => row.serviceType === serviceType && scopeIds.has(row.setById));
-  const scopedOverrides = overrides.filter((row) => row.serviceType === serviceType && scopeIds.has(row.setById));
+  const scopedOverrides = overrides.filter(
+    (row) => row.serviceType === serviceType && scopeIds.has(row.setById) && row.targetUserId === user.id
+  );
   const row = selectResolvedRate(user, scopedAncestors, serviceType, amountPaise, scopedDefaults, scopedOverrides);
 
   if (!row) {
@@ -252,7 +254,7 @@ async function loadRateContext(userId: string, serviceTypes: readonly string[], 
     prisma.userCommissionSetup.findMany({
       where: {
         setById: { in: ancestorIds },
-        targetUserId: chain.user.id,
+        targetUserId: { in: [chain.user.id, ...ancestorIds] },
         serviceType: { in: [...serviceTypes] },
         isActive: true,
         ...(options.excludeOverrideId ? { id: { not: options.excludeOverrideId } } : {}),
@@ -547,11 +549,13 @@ export async function buildChargeDistribution(
     return [] as ChargeDistributionEntry[];
   }
 
+  const chain = [...context.ancestors].reverse().concat(context.user);
   const charges = await Promise.all(
     beneficiaries.map((_, index) => {
       const scopedAncestors = context.ancestors.slice(context.ancestors.length - 1 - index);
+      const targetUser = chain[index + 1];
       return Promise.resolve(
-        resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides)
+        resolveChargeWithinAncestorScope(targetUser, scopedAncestors, serviceType, amount, context.defaults, context.overrides)
       );
     })
   );
