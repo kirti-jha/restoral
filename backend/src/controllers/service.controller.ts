@@ -226,43 +226,6 @@ export const submitFundRequest = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const approveFundRequest = async (req: AuthRequest, res: Response) => {
-  const id = req.params.id as string;
-  try {
-    const request = await prisma.serviceRequest.findUnique({
-      where: { id },
-      include: {
-        companyBankAccount: true,
-      },
-    });
-    if (!request || request.status !== 'PENDING') {
-      res.status(400).json({ success: false, message: 'Invalid request' });
-      return;
-    }
-
-    // Hierarchy Check
-    const hierarchyUsers = await fetchHierarchyUsers();
-    if (!canManageTarget(req.user!, request.userId, hierarchyUsers)) {
-      res.status(403).json({ success: false, message: 'Forbidden: You cannot manage this user hierarchy' });
-      return;
-    }
-
-    const grossAmount = new Prisma.Decimal(request.amount || 0);
-    if (grossAmount.lte(0)) {
-      res.status(400).json({ success: false, message: 'Request amount must be greater than zero' });
-      return;
-    }
-
-    const charge = new Prisma.Decimal(await resolveCharge(request.userId, 'FUND_REQUEST', toNumberAmount(request.amount)));
-    const creditedAmount = grossAmount.minus(charge).toDecimalPlaces(2);
-
-
-    res.status(201).json({ success: true, request });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
 
 export const approveFundRequest = async (req: AuthRequest, res: Response) => {
   const id = req.params.id as string;
@@ -338,8 +301,9 @@ export const approveFundRequest = async (req: AuthRequest, res: Response) => {
           type: 'DEBIT',
           description: `Fund Request Approved | Sent to ${request.userId}`,
           senderId: req.user!.id,
-          receiverId: request.userId,
+          receiverId: req.user!.id,
           senderBalAfter: updatedApproverWallet.balance,
+          receiverBalAfter: updatedApproverWallet.balance,
           serviceRequestId: id,
         },
       });
