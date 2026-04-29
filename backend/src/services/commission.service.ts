@@ -146,18 +146,23 @@ function resolveChargeWithinAncestorScope(
   serviceType: string,
   amountInput: Prisma.Decimal | string | number,
   defaults: NormalizedDefaultRow[],
-  overrides: NormalizedOverrideRow[]
+  overrides: NormalizedOverrideRow[],
+  fullChainContext?: ChainUser[]
 ) {
   const amount = toDecimalAmount(amountInput);
   const amountPaise = amount.mul(100).toDecimalPlaces(0).toNumber();
-  const scopeIds = new Set(scopedAncestors.map((ancestor) => ancestor.id));
-  const scopedDefaults = defaults.filter((row) => row.serviceType === serviceType && scopeIds.has(row.setById));
-  const scopedOverrides = overrides.filter(
-    (row) => row.serviceType === serviceType && scopeIds.has(row.setById) && row.targetUserId === user.id
-  );
-  const row = selectResolvedRate(user, scopedAncestors, serviceType, amountPaise, scopedDefaults, scopedOverrides);
 
-  if (!row) {
+  const resolvedRow = selectResolvedRate(
+    user,
+    scopedAncestors,
+    serviceType,
+    amountPaise,
+    defaults,
+    overrides,
+    fullChainContext
+  );
+
+  if (!resolvedRow) {
     return 0;
   }
 
@@ -276,13 +281,18 @@ function selectResolvedRate(
   serviceType: string,
   amountPaise: number,
   defaults: NormalizedDefaultRow[],
-  overrides: NormalizedOverrideRow[]
+  overrides: NormalizedOverrideRow[],
+  fullChainContext?: ChainUser[]
 ) {
-  const fullChain = [user, ...ancestors];
+  // The full chain from the end-user up to the top ancestor.
+  // This is used to allow rates to "fall back" to parent roles/users.
+  const chain = fullChainContext || [user, ...ancestors];
 
-  for (let i = ancestors.length - 1; i >= 0; i -= 1) {
+  for (let i = 0; i < ancestors.length; i += 1) {
     const ancestor = ancestors[i];
-    const subChain = fullChain.slice(0, fullChain.length - 1 - i);
+    // Find where this ancestor sits in the full chain to know who is "below" them.
+    const ancestorIndex = chain.findIndex((u) => u.id === ancestor.id);
+    const subChain = ancestorIndex > 0 ? chain.slice(0, ancestorIndex) : [user];
 
     // 1. Check for user-specific overrides from this ancestor (nearest to end-user wins)
     for (const targetUser of subChain) {
@@ -562,13 +572,22 @@ export async function buildChargeDistribution(
     return [] as ChargeDistributionEntry[];
   }
 
+  const fullChain = [context.user, ...context.ancestors];
   const charges = await Promise.all(
     beneficiaries.map((_, index) => {
       const scopedAncestors = context.ancestors.slice(context.ancestors.length - 1 - index);
       // Evaluates what this ancestor charges the original requester, 
       // incorporating hierarchical fallbacks if specific rates for roles/users are missing.
       return Promise.resolve(
-        resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides)
+        resolveChargeWithinAncestorScope(
+          context.user,
+          scopedAncestors,
+          serviceType,
+          amount,
+          context.defaults,
+          context.overrides,
+          fullChain
+        )
       );
     })
   );
