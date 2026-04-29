@@ -121,12 +121,17 @@ function RequestModal({ isOpen, onClose, onSaved, bankAccounts }) {
             <div className="space-y-1 md:col-span-2">
               <label className="text-xs font-bold uppercase text-gray-500">Amount</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 required
                 value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFormData({ ...formData, amount: val });
+                  }
+                }}
+                className="form-input"
                 placeholder="0.00"
                 autoFocus
               />
@@ -455,6 +460,11 @@ export default function Wallet() {
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to update bank account status');
     }
+  };
+
+  const getApiOrigin = () => {
+    const url = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    return url.endsWith('/') ? url.slice(0, -1) : url;
   };
 
   return (
@@ -803,15 +813,14 @@ export default function Wallet() {
                           </div>
                         </td>
                         <td>
-                          <span className={`badge ${txn.type === 'CREDIT' ? 'badge-success' : 'badge-danger'}`}>
+                          <span className={`text-[10px] font-bold ${txn.type === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
                             {txn.type}
                           </span>
                         </td>
-                        <td className={txn.type === 'CREDIT' ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
-                          {txn.type === 'CREDIT' ? '+' : '-'}
-                          {formatAmount(txn.amount)}
+                        <td className={`font-bold ${txn.type === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {txn.type === 'CREDIT' ? '+' : '-'} {formatAmount(txn.amount)}
                         </td>
-                        <td className="font-mono text-gray-500">{formatAmount(balance)}</td>
+                        <td className="font-bold">{formatAmount(balance)}</td>
                       </tr>
                     );
                   })
@@ -821,24 +830,6 @@ export default function Wallet() {
           </div>
         </div>
       )}
-
-      <RequestModal
-        isOpen={isRequestModalOpen}
-        onClose={() => setIsRequestModalOpen(false)}
-        onSaved={fetchAll}
-        bankAccounts={bankAccounts}
-      />
-
-      <BankAccountModal
-        isOpen={isBankModalOpen}
-        onClose={() => {
-          setIsBankModalOpen(false);
-          setCurrentBankAccount(null);
-        }}
-        onSaved={fetchAll}
-        initialData={currentBankAccount}
-      />
     </div>
   );
 }
-import { getApiOrigin } from '../lib/apiBaseUrl';

@@ -710,24 +710,47 @@ const UserChargesModal = ({ isOpen, onClose, targetUser }) => {
               <div className="form-group">
                 <label className="form-label">Min Amount Slab</label>
                 <input 
-                  type="number" required value={formData.minAmount}
-                  onChange={(e) => setFormData({...formData, minAmount: e.target.value})}
+                  type="text"
+                  inputMode="decimal"
+                  required
+                  value={formData.minAmount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      setFormData({...formData, minAmount: val});
+                    }
+                  }}
                   placeholder="0" className="form-input"
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Max Amount Slab</label>
                 <input 
-                  type="number" value={formData.maxAmount}
-                  onChange={(e) => setFormData({...formData, maxAmount: e.target.value})}
+                  type="text"
+                  inputMode="decimal"
+                  value={formData.maxAmount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      setFormData({...formData, maxAmount: val});
+                    }
+                  }}
                   placeholder="∞" className="form-input"
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Charge Value</label>
                 <input 
-                  type="number" step="0.01" required value={formData.commissionValue}
-                  onChange={(e) => setFormData({...formData, commissionValue: e.target.value})}
+                  type="text"
+                  inputMode="decimal"
+                  required
+                  value={formData.commissionValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      setFormData({...formData, commissionValue: val});
+                    }
+                  }}
                   placeholder="0.00" className="form-input"
                 />
               </div>
@@ -800,11 +823,16 @@ const WalletHoldModal = ({ isOpen, onClose, user, onUpdated }) => {
           <div className="space-y-1">
             <label className="text-xs font-bold text-gray-500 uppercase">Minimum Hold Amount (₹)</label>
             <input 
-              type="number" 
-              step="0.01" 
+              type="text"
+              inputMode="decimal"
               required 
               value={minimumHold} 
-              onChange={(e) => setMinimumHold(e.target.value)} 
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                  setMinimumHold(val);
+                }
+              }} 
               className="w-full text-lg font-bold"
               placeholder="0.00"
             />

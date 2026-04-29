@@ -278,13 +278,17 @@ export default function Payout() {
             <div className="form-group">
               <label className="form-label">Payout Amount (₹)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 required
-                min="0"
-                step="0.01"
                 placeholder="0.00"
                 value={formData.amount}
-                onChange={(event) => setFormData({ ...formData, amount: event.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFormData({ ...formData, amount: val });
+                  }
+                }}
                 className="form-input text-xl font-bold py-3"
               />
             </div>

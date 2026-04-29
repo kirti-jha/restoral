@@ -105,10 +105,16 @@ function RequestModal({ isOpen, onClose, onSaved, bankAccounts }) {
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-900 font-black text-lg pointer-events-none">₹</div>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     required
                     value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                        setFormData({ ...formData, amount: val });
+                      }
+                    }}
                     className="form-input pl-10 text-xl font-black h-14 bg-gray-50/50 border-gray-100 focus:bg-white"
                     placeholder="0.00"
                   />

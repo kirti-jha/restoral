@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Wallet as WalletIcon,
   XCircle,
-  Loader2,
 } from 'lucide-react';
 
 function formatAmount(value) {
@@ -322,7 +321,7 @@ export default function BankVerify() {
             </div>
 
             <button type="submit" className="btn-premium btn-premium-primary w-full py-4 text-base" disabled={loading}>
-              {loading ? <Loader2 className="animate-spin" size={20} /> : 'Verify Account Now'}
+              {loading ? <RefreshCw className="animate-spin" size={20} /> : 'Verify Account Now'}
             </button>
           </form>
 

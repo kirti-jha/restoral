@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../lib/api';
-import { Search, User, X, Loader2 } from 'lucide-react';
+import { Search, User, X, RefreshCw } from 'lucide-react';
 
 const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by name, email or mobile...', className = '' }) => {
   const [query, setQuery] = useState('');
@@ -82,7 +82,7 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
         {(query || loading) && (
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
             {loading ? (
-              <Loader2 size={16} className="animate-spin text-primary" />
+              <RefreshCw size={16} className="animate-spin text-primary" />
             ) : (
               <button 
                 type="button"

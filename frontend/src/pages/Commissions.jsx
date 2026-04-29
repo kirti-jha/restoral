@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Edit2, Plus, ShieldCheck, Trash2, UserPlus, User, X, Loader2 } from 'lucide-react';
+import { Edit2, Plus, ShieldCheck, Trash2, UserPlus, User, X, RefreshCw } from 'lucide-react';
 import UserSearch from '../components/common/UserSearch';
 
 const MANAGER_ROLES = ['ADMIN', 'SUPER', 'DISTRIBUTOR'];
@@ -241,12 +241,16 @@ function DefaultRateModal({ isOpen, onClose, onSaved, initialData, allowedRoles 
             <div className="form-group">
               <label className="form-label">Charge Value</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 required
                 value={formData.commissionValue}
-                onChange={(event) => setFormData({ ...formData, commissionValue: event.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFormData({ ...formData, commissionValue: val });
+                  }
+                }}
                 className="form-input"
                 placeholder="0.00"
               />
@@ -257,12 +261,16 @@ function DefaultRateModal({ isOpen, onClose, onSaved, initialData, allowedRoles 
             <div className="form-group">
               <label className="form-label">Min Amount</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 required
                 value={formData.minAmount}
-                onChange={(event) => setFormData({ ...formData, minAmount: event.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFormData({ ...formData, minAmount: val });
+                  }
+                }}
                 className="form-input"
                 placeholder="0.00"
               />
@@ -270,11 +278,15 @@ function DefaultRateModal({ isOpen, onClose, onSaved, initialData, allowedRoles 
             <div className="form-group">
               <label className="form-label">Max Amount</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={formData.maxAmount}
-                onChange={(event) => setFormData({ ...formData, maxAmount: event.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFormData({ ...formData, maxAmount: val });
+                  }
+                }}
                 className="form-input"
                 placeholder="∞"
               />
@@ -305,7 +317,7 @@ function DefaultRateModal({ isOpen, onClose, onSaved, initialData, allowedRoles 
               disabled={saving}
               className="btn-premium btn-premium-primary"
             >
-              {saving ? <Loader2 className="animate-spin" size={18} /> : (initialData ? 'Update Rate' : 'Save Rate')}
+              {saving ? <RefreshCw className="animate-spin" size={18} /> : (initialData ? 'Update Rate' : 'Save Rate')}
             </button>
           </div>
         </form>
@@ -454,12 +466,16 @@ function UserOverrideModal({ isOpen, onClose, onSaved, initialData, targets }) {
             <div className="form-group">
               <label className="form-label">Charge Value</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 required
                 value={formData.commissionValue}
-                onChange={(event) => setFormData({ ...formData, commissionValue: event.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFormData({ ...formData, commissionValue: val });
+                  }
+                }}
                 className="form-input"
                 placeholder="0.00"
               />
@@ -467,12 +483,16 @@ function UserOverrideModal({ isOpen, onClose, onSaved, initialData, targets }) {
             <div className="form-group">
               <label className="form-label">Min Amount</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 required
                 value={formData.minAmount}
-                onChange={(event) => setFormData({ ...formData, minAmount: event.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFormData({ ...formData, minAmount: val });
+                  }
+                }}
                 className="form-input"
                 placeholder="0.00"
               />
@@ -480,11 +500,15 @@ function UserOverrideModal({ isOpen, onClose, onSaved, initialData, targets }) {
             <div className="form-group">
               <label className="form-label">Max Amount</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={formData.maxAmount}
-                onChange={(event) => setFormData({ ...formData, maxAmount: event.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setFormData({ ...formData, maxAmount: val });
+                  }
+                }}
                 className="form-input"
                 placeholder="∞"
               />
@@ -516,7 +540,7 @@ function UserOverrideModal({ isOpen, onClose, onSaved, initialData, targets }) {
               disabled={saving}
               className="btn-premium btn-premium-primary"
             >
-              {saving ? <Loader2 className="animate-spin" size={18} /> : (initialData ? 'Update Override' : 'Save Override')}
+              {saving ? <RefreshCw className="animate-spin" size={18} /> : (initialData ? 'Update Override' : 'Save Override')}
             </button>
           </div>
         </form>
