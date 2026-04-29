@@ -22,6 +22,11 @@ function formatAmount(value) {
   return `₹ ${Number(value || 0).toFixed(2)}`;
 }
 
+const getApiOrigin = () => {
+  const url = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+};
+
 function resolveUploadUrl(filePath) {
   if (!filePath) return '';
   if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
@@ -549,10 +554,6 @@ export default function Wallet() {
     }
   };
 
-  const getApiOrigin = () => {
-    const url = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    return url.endsWith('/') ? url.slice(0, -1) : url;
-  };
 
   return (
     <div className="flex-col gap-6">
