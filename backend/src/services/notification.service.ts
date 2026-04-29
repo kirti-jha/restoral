@@ -31,7 +31,7 @@ export const createAdminNotification = async (
 ) => {
   try {
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN' },
+      where: { role: { in: ['ADMIN', 'SUPER'] } },
       select: { id: true },
     });
 
@@ -86,7 +86,7 @@ export const notifyAdminsAndUser = async (
 ) => {
   try {
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN' },
+      where: { role: { in: ['ADMIN', 'SUPER'] } },
       select: { id: true },
     });
 
