@@ -493,24 +493,35 @@ export default function Wallet() {
     setLedgerLoading(true);
     setError('');
 
-    try {
-      const requestsPromise = api.get(
-        `/services?serviceType=FUND_REQUEST${requestFilter ? `&status=${requestFilter}` : ''}`
-      );
-      const ledgerPromise = api.get('/reports/ledger');
-      const accountsPromise = api.get('/services/bank-accounts');
+    const results = await Promise.allSettled([
+      api.get(`/services?serviceType=FUND_REQUEST${requestFilter ? `&status=${requestFilter}` : ''}`),
+      api.get('/reports/ledger'),
+      api.get('/services/bank-accounts'),
+    ]);
 
-      const [{ data: requestsRes }, { data: ledgerRes }, { data: accountsRes }] = await Promise.all([
-        requestsPromise,
-        ledgerPromise,
-        accountsPromise,
-      ]);
+    const [requestsResult, ledgerResult, accountsResult] = results;
+    const failedSections = [];
 
-      setRequests(requestsRes.success ? requestsRes.requests : []);
-      setLedger(ledgerRes.success ? ledgerRes.transactions : []);
-      setBankAccounts(accountsRes.success ? accountsRes.accounts : []);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Unable to load wallet data');
+    if (requestsResult.status === 'fulfilled') {
+      setRequests(requestsResult.value.data.success ? requestsResult.value.data.requests : []);
+    } else {
+      failedSections.push('requests');
+    }
+
+    if (ledgerResult.status === 'fulfilled') {
+      setLedger(ledgerResult.value.data.success ? ledgerResult.value.data.transactions : []);
+    } else {
+      failedSections.push('ledger');
+    }
+
+    if (accountsResult.status === 'fulfilled') {
+      setBankAccounts(accountsResult.value.data.success ? accountsResult.value.data.accounts : []);
+    } else {
+      failedSections.push('bank accounts');
+    }
+
+    if (failedSections.length > 0) {
+      setError(`Some wallet data could not be loaded: ${failedSections.join(', ')}.`);
     }
 
     setLoading(false);
@@ -522,24 +533,24 @@ export default function Wallet() {
   }, [requestFilter]);
 
   const approveRequest = async (id) => {
-
+    setError('');
 
     try {
       await api.patch(`/services/fund-request/${id}/approve`);
       await refreshUser();
-      fetchAll();
+      await fetchAll();
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to approve request');
     }
   };
 
   const rejectRequest = async (id) => {
-
+    setError('');
 
     try {
       await api.patch(`/services/fund-request/${id}/reject`);
       await refreshUser();
-      fetchAll();
+      await fetchAll();
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to reject request');
     }
