@@ -223,7 +223,8 @@ export default function Commissions() {
   };
 
   const filteredSlabs = slabs.filter(s => s.serviceType === selService && s.applyOnRole === selRole);
-  const currentInherited = inheritedSlabs.filter(s => s.serviceType === selService && s.applyOnRole === selRole);
+  // Inherited charge is what the current user pays to their parent (base cost)
+  const currentInherited = inheritedSlabs.filter(s => s.serviceType === selService && s.applyOnRole === user.role);
   const filteredOverrides = overrides.filter(o => o.targetUserId === targetUser?.id);
 
   const findInheritedForRange = (min, max) => {
