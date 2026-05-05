@@ -20,13 +20,7 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const searchUsers = async (q) => {
-    if (!q.trim()) {
-      setResults([]);
-      setLoading(false);
-      return;
-    }
-
+  const searchUsers = async (q = '') => {
     setLoading(true);
     try {
       const { data } = await api.get(`/users/search?q=${encodeURIComponent(q)}`);
@@ -53,8 +47,7 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
         searchUsers(val);
       }, 300);
     } else {
-      setResults([]);
-      setIsOpen(false);
+      searchUsers('');
     }
   };
 
@@ -75,7 +68,13 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
           type="text"
           value={query}
           onChange={handleInputChange}
-          onFocus={() => query.trim() && results.length > 0 && setIsOpen(true)}
+          onFocus={() => {
+            if (!query.trim()) {
+              searchUsers('');
+            } else if (results.length > 0) {
+              setIsOpen(true);
+            }
+          }}
           placeholder={placeholder}
           className="form-input pl-10 pr-10"
         />
