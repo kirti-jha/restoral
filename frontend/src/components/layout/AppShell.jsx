@@ -54,23 +54,17 @@ export default function AppShell() {
   const navLinks = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     ...(user.role !== 'RETAILER' ? [
+      { name: 'User Management', path: '/users', icon: Users },
       { name: 'Charges', path: '/commissions', icon: Settings },
       { name: 'Commissions', path: '/commission-report', icon: Coins },
     ] : []),
     { name: 'Wallet', path: '/wallet', icon: Wallet },
-    // { name: 'KYC Verification', path: '/kyc-verification', icon: ShieldCheck },
     { name: 'Fund Requests', path: '/funds', icon: Banknote },
     { name: 'Bank Verification', path: '/bank-verify', icon: Building2 },
     { name: 'Payout', path: '/payout', icon: Send },
     { name: 'Reports', path: '/reports', icon: FileText },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
-
-  if (['ADMIN', 'SUPER', 'DISTRIBUTOR'].includes(user.role)) {
-    // Insert User Management after Dashboard if it's missing or after Charges/Commissions
-    const insertIdx = user.role === 'RETAILER' ? 1 : 3;
-    navLinks.splice(insertIdx, 0, { name: 'User Management', path: '/users', icon: Users });
-  }
 
   useEffect(() => {
     refreshUser();
