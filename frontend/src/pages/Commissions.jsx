@@ -52,7 +52,7 @@ function formatRange(minAmount, maxAmount) {
   return `${formatAmount(minAmount)} - ${maxAmount === null || maxAmount === undefined ? 'Max' : formatAmount(maxAmount)}`;
 }
 
-const ChargeForm = ({ initialData, onCancel, onSaved, context }) => {
+const ChargeForm = ({ initialData, onCancel, onSaved, context, isAdmin }) => {
   const [formData, setFormData] = useState({
     minAmount: initialData?.minAmount ?? '',
     maxAmount: initialData?.maxAmount ?? '',
@@ -86,6 +86,8 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context }) => {
     setSaving(false);
   };
 
+  const isReadOnly = !isAdmin;
+
   return (
     <form onSubmit={handleSubmit} className="p-8 bg-white rounded-3xl border border-gray-100 shadow-xl space-y-8 animate-slide-down">
       <div className="flex justify-between items-center border-b border-gray-50 pb-4">
@@ -104,18 +106,20 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context }) => {
           <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Minimum Amount (₹)</label>
           <input 
             type="text" value={formData.minAmount} 
-            onChange={e => setFormData({...formData, minAmount: e.target.value})} 
-            className="form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all" 
+            onChange={e => !isReadOnly && setFormData({...formData, minAmount: e.target.value})} 
+            className={`form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all ${isReadOnly ? 'cursor-not-allowed opacity-70' : ''}`} 
             placeholder="0.00" required 
+            readOnly={isReadOnly}
           />
         </div>
         <div className="form-group mb-0">
           <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Maximum Amount (₹)</label>
           <input 
             type="text" value={formData.maxAmount} 
-            onChange={e => setFormData({...formData, maxAmount: e.target.value})} 
-            className="form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all" 
+            onChange={e => !isReadOnly && setFormData({...formData, maxAmount: e.target.value})} 
+            className={`form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all ${isReadOnly ? 'cursor-not-allowed opacity-70' : ''}`} 
             placeholder="Leave empty for unlimited" 
+            readOnly={isReadOnly}
           />
         </div>
       </div>
@@ -125,8 +129,9 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context }) => {
           <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Charge Mechanism</label>
           <select 
             value={formData.commissionType} 
-            onChange={e => setFormData({...formData, commissionType: e.target.value})} 
-            className="form-input h-14 text-xs font-black uppercase bg-gray-50/50 border-gray-200"
+            onChange={e => !isReadOnly && setFormData({...formData, commissionType: e.target.value})} 
+            className={`form-input h-14 text-xs font-black uppercase bg-gray-50/50 border-gray-200 ${isReadOnly ? 'cursor-not-allowed opacity-70' : ''}`}
+            disabled={isReadOnly}
           >
             {COMMISSION_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -275,14 +280,17 @@ export default function Commissions() {
               <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Active Slabs for {selService} - {ROLE_LABELS[selRole]}</h3>
               {!isAdmin && <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 flex items-center gap-1"><ShieldAlert size={10} /> Inheritance and Deletion policy active</p>}
             </div>
-            <button onClick={() => { setEditingSlab(null); setIsFormOpen(!isFormOpen); }} className="btn-premium btn-premium-secondary px-6 py-2.5 text-[10px]">
-              {isFormOpen ? <X size={14} className="mr-2" /> : <Plus size={14} className="mr-2" />}
-              {isFormOpen ? 'CANCEL' : 'ADD SLAB'}
-            </button>
+            {isAdmin && (
+              <button onClick={() => { setEditingSlab(null); setIsFormOpen(!isFormOpen); }} className="btn-premium btn-premium-secondary px-6 py-2.5 text-[10px]">
+                {isFormOpen ? <X size={14} className="mr-2" /> : <Plus size={14} className="mr-2" />}
+                {isFormOpen ? 'CANCEL' : 'ADD SLAB'}
+              </button>
+            )}
           </div>
 
           {isFormOpen && !editingSlab && (
             <ChargeForm 
+              isAdmin={isAdmin}
               context={{ serviceType: selService, applyOnRole: selRole }}
               onCancel={() => setIsFormOpen(false)}
               onSaved={() => { fetchData(); setIsFormOpen(false); }}
@@ -334,8 +342,8 @@ export default function Commissions() {
                           </td>
                         </tr>
                         {editingSlab?.id === s.id && (
-                          <tr><td colSpan="5" className="p-4 bg-gray-50/30"><ChargeForm initialData={s} context={{ serviceType: selService, applyOnRole: selRole }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
-                        )}
+                        <tr><td colSpan={isAdmin ? 5 : 5} className="p-4 bg-gray-50/30"><ChargeForm isAdmin={isAdmin} initialData={s} context={{ serviceType: selService, applyOnRole: selRole }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
+                      )}
                       </React.Fragment>
                     );
                   })
@@ -393,6 +401,7 @@ export default function Commissions() {
                  </select>
               </div>
               <ChargeForm 
+                isAdmin={isAdmin}
                 context={{ targetUserId: targetUser.id, serviceType: selService || 'PAYOUT' }}
                 onCancel={() => setIsFormOpen(false)}
                 onSaved={() => { fetchData(); setIsFormOpen(false); }}
@@ -439,7 +448,7 @@ export default function Commissions() {
                         </td>
                       </tr>
                       {editingSlab?.id === o.id && (
-                        <tr><td colSpan="5" className="p-4 bg-gray-50/30"><ChargeForm initialData={o} context={{ targetUserId: targetUser.id, serviceType: o.serviceType }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
+                        <tr><td colSpan="5" className="p-4 bg-gray-50/30"><ChargeForm isAdmin={isAdmin} initialData={o} context={{ targetUserId: targetUser.id, serviceType: o.serviceType }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
                       )}
                     </React.Fragment>
                   ))
