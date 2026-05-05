@@ -42,6 +42,7 @@ export default function Payout() {
   const [beneficiariesLoading, setBeneficiariesLoading] = useState(true);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historySearch, setHistorySearch] = useState('');
   const [quote, setQuote] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState('');
@@ -57,9 +58,19 @@ export default function Payout() {
   });
 
   const selectedBeneficiary = useMemo(
-    () => beneficiaries.find((beneficiary) => beneficiary.id === formData.beneficiaryId) || null,
     [beneficiaries, formData.beneficiaryId]
   );
+
+  const filteredHistory = useMemo(() => {
+    if (!historySearch) return history;
+    const s = historySearch.toLowerCase();
+    return history.filter(h => 
+      (h.accountName?.toLowerCase().includes(s)) || 
+      (h.bankName?.toLowerCase().includes(s)) || 
+      (h.accountNumber?.includes(s)) || 
+      (h.bankRef?.toLowerCase().includes(s))
+    );
+  }, [history, historySearch]);
 
   const fetchBeneficiaries = async () => {
     setBeneficiariesLoading(true);
@@ -410,21 +421,20 @@ export default function Payout() {
         </div>
 
         <div className="card h-full flex flex-col">
-          <div className="p-5 border-b flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <History size={18} className="text-gray-400" />
-              <h2 className="font-semibold">Payout History</h2>
-            </div>
-            <button onClick={fetchHistory} className="btn btn-outline btn-sm" type="button">
-              <RefreshCw size={16} />
-              Refresh
-            </button>
+          <div className="p-3 border-b bg-gray-50/30">
+            <input 
+              type="text" 
+              placeholder="Search history by name, bank, or ref..." 
+              value={historySearch}
+              onChange={e => setHistorySearch(e.target.value)}
+              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-primary outline-none"
+            />
           </div>
 
-          <div className="flex-1 overflow-y-auto max-h-[720px]">
+          <div className="flex-1 overflow-y-auto max-h-[640px]">
             {historyLoading ? (
               <div className="p-10 text-center text-gray-400">Loading history...</div>
-            ) : history.length === 0 ? (
+            ) : filteredHistory.length === 0 ? (
               <div className="p-10 text-center text-gray-400">No payout records found.</div>
             ) : (
               <div className="overflow-x-auto">
@@ -440,7 +450,7 @@ export default function Payout() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {history.map((item) => (
+                    {filteredHistory.map((item) => (
                       <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-5 py-4 align-top">
                           <div className="text-sm font-medium text-gray-900">{formatDateTime(item.createdAt)}</div>

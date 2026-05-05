@@ -17,6 +17,7 @@ import {
   MoreVertical,
   Download
 } from 'lucide-react';
+import UserSearch from '../components/common/UserSearch';
 
 function RequestModal({ isOpen, onClose, onSaved, bankAccounts }) {
   const [formData, setFormData] = useState({
@@ -231,12 +232,16 @@ export default function FundRequests() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState('');
   const [actionInProgress, setActionInProgress] = useState(null);
+  const [selectedUserId, setSelectedUserId] = useState('');
 
   const fetchAll = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
+      let url = `/services?serviceType=FUND_REQUEST${filter ? `&status=${filter}` : ''}`;
+      if (selectedUserId) url += `&userId=${selectedUserId}`;
+      
       const [reqRes, bankRes] = await Promise.all([
-        api.get(`/services?serviceType=FUND_REQUEST${filter ? `&status=${filter}` : ''}`),
+        api.get(url),
         api.get('/services/bank-accounts'),
       ]);
       setRequests(reqRes.data.success ? reqRes.data.requests : []);
@@ -251,7 +256,7 @@ export default function FundRequests() {
     fetchAll();
     const interval = setInterval(() => fetchAll(false), 10000); // Polling every 10s (silent)
     return () => clearInterval(interval);
-  }, [filter]);
+  }, [filter, selectedUserId]);
 
   const approveRequest = async (id) => {
     if (actionInProgress) return;
@@ -300,21 +305,32 @@ export default function FundRequests() {
         )}
       </div>
 
-      {/* Filter Bar */}
-      <div className="glass-panel p-2 flex flex-wrap items-center gap-2 max-w-max">
-        {['PENDING', 'SUCCESS', 'FAILED'].map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-              filter === s 
-                ? 'bg-gray-900 text-white shadow-lg scale-105' 
-                : 'text-gray-400 hover:bg-gray-50'
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="glass-panel p-2 flex flex-wrap items-center gap-2 max-w-max">
+          {['PENDING', 'SUCCESS', 'FAILED'].map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                filter === s 
+                  ? 'bg-gray-900 text-white shadow-lg scale-105' 
+                  : 'text-gray-400 hover:bg-gray-50'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        {isAdmin && (
+          <div className="flex-1 max-w-sm">
+            <UserSearch 
+              onSelect={(u) => setSelectedUserId(u?.id || '')} 
+              placeholder="Filter by user..." 
+              className="h-12"
+            />
+          </div>
+        )}
       </div>
 
       {/* Table Section */}
@@ -323,6 +339,7 @@ export default function FundRequests() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50/50">
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest w-16">ID</th>
                 <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">User / Date</th>
                 <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Amount</th>
                 <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Info</th>
@@ -353,8 +370,13 @@ export default function FundRequests() {
                   </td>
                 </tr>
               ) : (
-                requests.map((r) => (
+                requests.map((r, index) => (
                   <tr key={r.id} className="hover:bg-gray-50/50 transition-colors group">
+                    <td className="p-6">
+                      <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-1 rounded-lg border border-primary/10">
+                        abv{String(index + 1).padStart(3, '0')}
+                      </span>
+                    </td>
                     <td className="p-6">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-2xl bg-primary/5 flex items-center justify-center text-primary font-black">

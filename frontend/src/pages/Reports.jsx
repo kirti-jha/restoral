@@ -64,6 +64,7 @@ export default function Reports() {
         <table className="data-table">
           <thead>
             <tr>
+              <th className="w-16">S.No</th>
               <th>Date</th>
               {activeTab === 'fund_added' && <th>Admin/Super</th>}
               <th>Description</th>
@@ -73,8 +74,9 @@ export default function Reports() {
             </tr>
           </thead>
           <tbody>
-            {data.map(txn => (
+            {data.map((txn, index) => (
               <tr key={txn.id}>
+                <td className="p-4"><span className="text-[10px] font-black text-gray-400">#{String(index + 1).padStart(3, '0')}</span></td>
                 <td className="text-xs text-gray-500">{new Date(txn.createdAt).toLocaleString()}</td>
                 {activeTab === 'fund_added' && (
                   <td>
@@ -103,8 +105,8 @@ export default function Reports() {
       <table className="data-table">
         <thead>
           <tr>
+            <th className="w-16">ID</th>
             <th>Date</th>
-            <th>ID</th>
             <th>User Details</th>
             <th>Service</th>
             <th>Amount</th>
@@ -112,18 +114,22 @@ export default function Reports() {
           </tr>
         </thead>
         <tbody>
-          {data.map(req => (
+          {data.map((req, index) => (
             <tr key={req.id}>
+              <td className="p-4">
+                <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-1 rounded-lg border border-primary/10">
+                  abv{String(index + 1).padStart(3, '0')}
+                </span>
+              </td>
               <td className="text-xs text-gray-500">{new Date(req.createdAt).toLocaleDateString()}</td>
-              <td><span className="text-[10px] font-mono font-bold text-gray-400">#{req.id.substring(0, 6)}</span></td>
               <td>
                 <div className="flex flex-col">
-                  <span className="font-semibold text-xs">{req.user?.profile?.ownerName}</span>
+                  <span className="font-semibold text-xs">{req.user?.profile?.ownerName || req.user?.email}</span>
                   <span className="text-[10px] text-gray-400">{req.user?.role}</span>
                 </div>
               </td>
-              <td className="text-primary font-medium text-xs">{req.serviceType}</td>
-              <td className="font-bold">₹{Number(req.amount).toFixed(2)}</td>
+              <td className="text-primary font-medium text-xs uppercase">{req.serviceType}</td>
+              <td className="font-bold text-sm">₹{Number(req.amount).toFixed(2)}</td>
               <td>
                 <span className={`badge ${req.status === 'SUCCESS' ? 'badge-success' : req.status === 'PENDING' ? 'badge-warning' : 'badge-danger'}`}>
                   {req.status}

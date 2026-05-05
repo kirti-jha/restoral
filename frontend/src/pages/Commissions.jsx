@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Edit2, Plus, ShieldCheck, Trash2, UserPlus, User, X, RefreshCw } from 'lucide-react';
+import { 
+  Edit2, Plus, Trash2, UserPlus, User, X, 
+  RefreshCw, ArrowRightLeft, CreditCard, ShieldAlert 
+} from 'lucide-react';
 import UserSearch from '../components/common/UserSearch';
 
 const MANAGER_ROLES = ['ADMIN', 'SUPER', 'DISTRIBUTOR'];
@@ -19,8 +22,8 @@ const ROLE_LABELS = {
 };
 
 const SERVICE_OPTIONS = [
-  { value: 'PAYOUT', label: 'Payout' },
-  { value: 'FUND_REQUEST', label: 'Fund Request' },
+  { value: 'PAYOUT', label: 'Payout', icon: ArrowRightLeft },
+  { value: 'FUND_REQUEST', label: 'Fund Request', icon: CreditCard },
 ];
 
 const SERVICE_LABELS = {
@@ -29,8 +32,8 @@ const SERVICE_LABELS = {
 };
 
 const COMMISSION_TYPE_OPTIONS = [
-  { value: 'FLAT', label: 'Flat' },
-  { value: 'PERCENTAGE', label: 'Percentage' },
+  { value: 'FLAT', label: 'Flat (₹)' },
+  { value: 'PERCENTAGE', label: 'Percentage (%)' },
 ];
 
 function formatAmount(value) {
@@ -41,10 +44,7 @@ function formatAmount(value) {
 }
 
 function formatCharge(type, value) {
-  if (type === 'PERCENTAGE') {
-    return `${Number(value || 0).toFixed(2)}%`;
-  }
-
+  if (type === 'PERCENTAGE') return `${Number(value || 0).toFixed(2)}%`;
   return formatAmount(value);
 }
 
@@ -52,859 +52,426 @@ function formatRange(minAmount, maxAmount) {
   return `${formatAmount(minAmount)} - ${maxAmount === null || maxAmount === undefined ? 'Max' : formatAmount(maxAmount)}`;
 }
 
-function getAssignableRoles(role) {
-  return ROLE_OPTIONS_BY_MANAGER[role] || [];
-}
-
-function createEmptyDefaultRate(allowedRoles) {
-  return {
-    serviceType: 'PAYOUT',
-    applyOnRole: allowedRoles[0] || 'RETAILER',
-    commissionType: 'FLAT',
-    commissionValue: '',
-    minAmount: '',
-    maxAmount: '',
-    isActive: true,
-  };
-}
-
-function createEmptyOverride(targets) {
-  return {
-    targetUserId: targets[0]?.id || '',
-    serviceType: 'PAYOUT',
-    commissionType: 'FLAT',
-    commissionValue: '',
-    minAmount: '',
-    maxAmount: '',
-    isActive: true,
-  };
-}
-
-function toFormState(row, fallback) {
-  if (!row) {
-    return fallback;
-  }
-
-  return {
-    ...fallback,
-    ...row,
-    commissionValue: row.commissionValue ?? '',
-    minAmount: row.minAmount ?? '',
-    maxAmount: row.maxAmount ?? '',
-    isActive: row.isActive ?? true,
-  };
-}
-
-function preparePayload(formData) {
-  return {
-    ...formData,
-    maxAmount: formData.maxAmount === '' ? null : formData.maxAmount,
-  };
-}
-
-function getTargetLabel(user) {
-  const primary = user?.profile?.ownerName || user?.profile?.shopName || user?.email || 'Unknown user';
-  return `${primary} (${ROLE_LABELS[user?.role] || user?.role || 'User'})`;
-}
-
-function StatusBadge({ isActive }) {
-  return (
-    <span className={`badge ${isActive ? 'badge-success' : 'badge-danger'}`}>
-      {isActive ? 'Active' : 'Paused'}
-    </span>
-  );
-}
-
-function TabButton({ active, label, onClick }) {
-  return (
-    <button
-      className={`pb-2 px-4 text-sm font-medium transition-colors ${
-        active ? 'text-primary border-b-2 border-primary' : 'text-gray-500'
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      {label}
-    </button>
-  );
-}
-
-function DefaultRateModal({ isOpen, onClose, onSaved, initialData, allowedRoles }) {
-  const [formData, setFormData] = useState(createEmptyDefaultRate(allowedRoles));
+const ChargeForm = ({ initialData, onCancel, onSaved, context }) => {
+  const [formData, setFormData] = useState({
+    minAmount: initialData?.minAmount ?? '',
+    maxAmount: initialData?.maxAmount ?? '',
+    commissionValue: initialData?.commissionValue ?? '',
+    commissionType: initialData?.commissionType || 'FLAT',
+    isActive: initialData?.isActive ?? true,
+    ...context
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    setSaving(false);
-    setError('');
-    setFormData(toFormState(initialData, createEmptyDefaultRate(allowedRoles)));
-  }, [allowedRoles, initialData, isOpen]);
-
-  if (!isOpen) {
-    return null;
-  }
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setSaving(true);
     setError('');
-
     try {
-      const payload = preparePayload({
+      const payload = {
         ...formData,
         id: initialData?.id,
-      });
-
-      if (initialData?.id) {
-        await api.put('/commissions/slabs', payload);
-      } else {
-        await api.post('/commissions/slabs', payload);
-      }
-
+        maxAmount: formData.maxAmount === '' ? null : formData.maxAmount,
+      };
+      
+      const endpoint = context.targetUserId ? '/commissions/overrides' : '/commissions/slabs';
+      const method = initialData?.id ? 'put' : 'post';
+      
+      await api[method](endpoint, payload);
       onSaved();
-      onClose();
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to save default rate');
+      setError(err.response?.data?.message || 'Failed to save');
     }
-
     setSaving(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-xl p-8 shadow-2xl animate-slide-up border border-gray-100">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">{initialData ? 'Edit Default Rate' : 'Add Default Rate'}</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Set standard rates for your direct children.
-            </p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
-            <X size={20} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="form-group">
-              <label className="form-label">Service</label>
-              <select
-                value={formData.serviceType}
-                onChange={(event) => setFormData({ ...formData, serviceType: event.target.value })}
-                className="form-input form-select"
-              >
-                {SERVICE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Child Role</label>
-              <select
-                value={formData.applyOnRole}
-                onChange={(event) => setFormData({ ...formData, applyOnRole: event.target.value })}
-                className="form-input form-select"
-              >
-                {allowedRoles.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABELS[role] || role}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="form-group">
-              <label className="form-label">Charge Type</label>
-              <select
-                value={formData.commissionType}
-                onChange={(event) => setFormData({ ...formData, commissionType: event.target.value })}
-                className="form-input form-select"
-              >
-                {COMMISSION_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Charge Value</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                required
-                value={formData.commissionValue}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                    setFormData({ ...formData, commissionValue: val });
-                  }
-                }}
-                className="form-input"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="form-group">
-              <label className="form-label">Min Amount</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                required
-                value={formData.minAmount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                    setFormData({ ...formData, minAmount: val });
-                  }
-                }}
-                className="form-input"
-                placeholder="0.00"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Max Amount</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={formData.maxAmount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                    setFormData({ ...formData, maxAmount: val });
-                  }
-                }}
-                className="form-input"
-                placeholder="∞"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Status</label>
-              <select
-                value={formData.isActive ? 'true' : 'false'}
-                onChange={(event) => setFormData({ ...formData, isActive: event.target.value === 'true' })}
-                className="form-input form-select"
-              >
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-premium btn-premium-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-premium btn-premium-primary"
-            >
-              {saving ? <RefreshCw className="animate-spin" size={18} /> : (initialData ? 'Update Rate' : 'Save Rate')}
-            </button>
-          </div>
-        </form>
+    <form onSubmit={handleSubmit} className="p-6 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6 animate-slide-down">
+      <div className="flex justify-between items-center">
+        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{initialData ? 'Update' : 'Add New'} Slab</h4>
+        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
       </div>
-    </div>
-  );
-}
-
-function UserOverrideModal({ isOpen, onClose, onSaved, initialData, targets }) {
-  const [formData, setFormData] = useState(createEmptyOverride(targets));
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    setSaving(false);
-    setError('');
-    setFormData(toFormState(initialData, createEmptyOverride(targets)));
-    
-    if (initialData?.targetUser) {
-      setSelectedUser(initialData.targetUser);
-    } else {
-      setSelectedUser(null);
-    }
-  }, [initialData, isOpen, targets]);
-
-  if (!isOpen) {
-    return null;
-  }
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!formData.targetUserId) {
-      setError('Please select a target user');
-      return;
-    }
-    setSaving(true);
-    setError('');
-
-    try {
-      const payload = preparePayload({
-        ...formData,
-        id: initialData?.id,
-      });
-
-      if (initialData?.id) {
-        await api.put('/commissions/overrides', payload);
-      } else {
-        await api.post('/commissions/overrides', payload);
-      }
-
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Unable to save user override');
-    }
-
-    setSaving(false);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-xl p-8 shadow-2xl animate-slide-up border border-gray-100">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">{initialData ? 'Edit User Override' : 'Add User Override'}</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Custom rates for specific users in your managed hierarchy.
-            </p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
-            <X size={20} />
-          </button>
+      
+      {error && <div className="p-3 bg-red-50 text-red-600 text-[10px] font-bold uppercase rounded-lg">{error}</div>}
+      
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+        <div className="form-group">
+          <label className="form-label text-[9px] mb-1">MIN AMOUNT (₹)</label>
+          <input type="text" value={formData.minAmount} onChange={e => setFormData({...formData, minAmount: e.target.value})} className="form-input h-11 font-bold text-xs" placeholder="0.00" required />
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-
-          <div className="form-group">
-            <label className="form-label">TARGET USER</label>
-            {selectedUser ? (
-              <div className="flex items-center justify-between p-4 bg-primary-light/50 border border-primary/20 rounded-xl animate-fade-in group">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center text-primary">
-                    <User size={24} />
-                  </div>
-                  <div>
-                    <div className="text-base font-bold text-gray-900">{getTargetLabel(selectedUser)}</div>
-                    <div className="text-sm text-gray-500">{selectedUser.email}</div>
-                  </div>
-                </div>
-                {!initialData && (
-                  <button 
-                    type="button" 
-                    onClick={() => { setSelectedUser(null); setFormData({ ...formData, targetUserId: '' }); }} 
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-                  >
-                    <X size={20} />
-                  </button>
-                )}
-              </div>
-            ) : (
-              <UserSearch onSelect={(u) => {
-                setSelectedUser(u);
-                setFormData({ ...formData, targetUserId: u?.id || '' });
-              }} />
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="form-group">
-              <label className="form-label">Service</label>
-              <select
-                value={formData.serviceType}
-                onChange={(event) => setFormData({ ...formData, serviceType: event.target.value })}
-                className="form-input form-select"
-              >
-                {SERVICE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Charge Type</label>
-              <select
-                value={formData.commissionType}
-                onChange={(event) => setFormData({ ...formData, commissionType: event.target.value })}
-                className="form-input form-select"
-              >
-                {COMMISSION_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="form-group">
-              <label className="form-label">Charge Value</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                required
-                value={formData.commissionValue}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                    setFormData({ ...formData, commissionValue: val });
-                  }
-                }}
-                className="form-input"
-                placeholder="0.00"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Min Amount</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                required
-                value={formData.minAmount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                    setFormData({ ...formData, minAmount: val });
-                  }
-                }}
-                className="form-input"
-                placeholder="0.00"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Max Amount</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={formData.maxAmount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                    setFormData({ ...formData, maxAmount: val });
-                  }
-                }}
-                className="form-input"
-                placeholder="∞"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-bold uppercase">Status</label>
-            <select
-              value={String(formData.isActive)}
-              onChange={(event) => setFormData({ ...formData, isActive: event.target.value === 'true' })}
-              className="w-full"
-            >
-              <option value="true">Active</option>
-              <option value="false">Paused</option>
+        <div className="form-group">
+          <label className="form-label text-[9px] mb-1">MAX AMOUNT (₹)</label>
+          <input type="text" value={formData.maxAmount} onChange={e => setFormData({...formData, maxAmount: e.target.value})} className="form-input h-11 font-bold text-xs" placeholder="Leave empty for Max" />
+        </div>
+        <div className="form-group">
+          <label className="form-label text-[9px] mb-1">CHARGE VALUE</label>
+          <div className="flex gap-2">
+            <input type="text" value={formData.commissionValue} onChange={e => setFormData({...formData, commissionValue: e.target.value})} className="form-input h-11 font-bold text-xs flex-1" placeholder="0.00" required />
+            <select value={formData.commissionType} onChange={e => setFormData({...formData, commissionType: e.target.value})} className="form-input h-11 text-[9px] font-black w-24">
+              {COMMISSION_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-premium btn-premium-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-premium btn-premium-primary"
-            >
-              {saving ? <RefreshCw className="animate-spin" size={18} /> : (initialData ? 'Update Override' : 'Save Override')}
-            </button>
-          </div>
-        </form>
+        </div>
+        <div className="flex gap-2">
+          <select value={formData.isActive ? 'true' : 'false'} onChange={e => setFormData({...formData, isActive: e.target.value === 'true'})} className="form-input h-11 text-[9px] font-black w-24">
+            <option value="true">ACTIVE</option>
+            <option value="false">PAUSED</option>
+          </select>
+          <button type="submit" disabled={saving} className="btn-premium btn-premium-primary h-11 flex-1 text-[10px] font-black tracking-widest uppercase">
+            {saving ? '...' : 'SAVE SLAB'}
+          </button>
+        </div>
       </div>
-    </div>
+    </form>
   );
-}
+};
 
 export default function Commissions() {
   const { user } = useAuth();
+  const isAdmin = user.role === 'ADMIN';
   const canManageRates = MANAGER_ROLES.includes(user.role);
-  const showMyCharges = user.role !== 'ADMIN';
-  const allowedRoles = getAssignableRoles(user.role);
+  const allowedRoles = ROLE_OPTIONS_BY_MANAGER[user.role] || [];
 
-  const [defaultRates, setDefaultRates] = useState([]);
-  const [inheritedDefaultRates, setInheritedDefaultRates] = useState([]);
-  const [userOverrides, setUserOverrides] = useState([]);
-  const [overrideTargets, setOverrideTargets] = useState([]);
-  const [effectiveRates, setEffectiveRates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState(canManageRates || !showMyCharges ? 'defaults' : 'myCharges');
-  const [isDefaultModalOpen, setIsDefaultModalOpen] = useState(false);
-  const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
-  const [currentDefaultRate, setCurrentDefaultRate] = useState(null);
-  const [currentOverride, setCurrentOverride] = useState(null);
-
-  useEffect(() => {
-    setActiveTab(canManageRates || !showMyCharges ? 'defaults' : 'myCharges');
-  }, [canManageRates, showMyCharges]);
+  const [activeTab, setActiveTab] = useState(canManageRates ? 'defaults' : 'myCharges');
+  
+  const [selService, setSelService] = useState(null);
+  const [selRole, setSelRole] = useState(null);
+  const [targetUser, setTargetUser] = useState(null);
+  
+  const [slabs, setSlabs] = useState([]);
+  const [inheritedSlabs, setInheritedSlabs] = useState([]);
+  const [overrides, setOverrides] = useState([]);
+  const [effective, setEffective] = useState([]);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingSlab, setEditingSlab] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
-    setError('');
-
     try {
+      const endpoints = canManageRates 
+        ? ['/commissions/slabs', '/commissions/overrides', '/commissions/effective']
+        : ['/commissions/effective'];
+        
+      const results = await Promise.all(endpoints.map(e => api.get(e)));
+      
       if (canManageRates) {
-        const [
-          { data: defaultsResponse },
-          { data: overridesResponse },
-          { data: targetsResponse },
-          { data: effectiveResponse },
-        ] = await Promise.all([
-          api.get('/commissions/slabs'),
-          api.get('/commissions/overrides'),
-          api.get('/commissions/targets'),
-          api.get('/commissions/effective'),
-        ]);
-
-        setDefaultRates(defaultsResponse.success ? defaultsResponse.slabs : []);
-        setInheritedDefaultRates(defaultsResponse.success ? (defaultsResponse.inheritedSlabs || []) : []);
-        setUserOverrides(overridesResponse.success ? overridesResponse.overrides : []);
-        setOverrideTargets(targetsResponse.success ? targetsResponse.targets : []);
-        setEffectiveRates(effectiveResponse.success ? effectiveResponse.slabs : []);
+        setSlabs(results[0].data.slabs || []);
+        setInheritedSlabs(results[0].data.inheritedSlabs || []);
+        setOverrides(results[1].data.overrides || []);
+        setEffective(results[2].data.slabs || []);
       } else {
-        const { data } = await api.get('/commissions/effective');
-        setEffectiveRates(data.success ? data.slabs : []);
+        setEffective(results[0].data.slabs || []);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to load rate settings');
+      setError('Failed to load charge settings');
     }
-
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [canManageRates]);
+  useEffect(() => { fetchData(); }, [canManageRates]);
 
-  const handleDeleteDefaultRate = async (rateId) => {
-    if (!window.confirm('Delete this default rate?')) {
-      return;
-    }
-
+  const handleDelete = async (id, isOverride = false) => {
+    if (!isAdmin) return;
+    if (!window.confirm('Delete this slab permanently?')) return;
     try {
-      await api.delete(`/commissions/slabs/${rateId}`);
+      const endpoint = isOverride ? `/commissions/overrides/${id}` : `/commissions/slabs/${id}`;
+      await api.delete(endpoint);
       fetchData();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Unable to delete default rate');
-    }
+    } catch (err) { alert(err.response?.data?.message || 'Delete failed'); }
   };
 
-  const handleDeleteOverride = async (overrideId) => {
-    if (!window.confirm('Delete this user override?')) {
-      return;
-    }
+  const filteredSlabs = slabs.filter(s => s.serviceType === selService && s.applyOnRole === selRole);
+  const currentInherited = inheritedSlabs.filter(s => s.serviceType === selService && s.applyOnRole === selRole);
+  const filteredOverrides = overrides.filter(o => o.targetUserId === targetUser?.id);
 
-    try {
-      await api.delete(`/commissions/overrides/${overrideId}`);
-      fetchData();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Unable to delete user override');
-    }
+  const findInheritedForRange = (min, max) => {
+    return currentInherited.find(s => 
+      Number(s.minAmount).toFixed(2) === Number(min).toFixed(2) && 
+      (s.maxAmount === null ? max === null : Number(s.maxAmount).toFixed(2) === Number(max).toFixed(2))
+    );
   };
+
+  const renderDefaultSelector = () => (
+    <div className="space-y-8 animate-slide-up">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {SERVICE_OPTIONS.map(opt => {
+          const Icon = opt.icon;
+          const isActive = selService === opt.value;
+          return (
+            <button 
+              key={opt.value} onClick={() => { setSelService(opt.value); setSelRole(null); setIsFormOpen(false); }}
+              className={`p-8 rounded-3xl border-2 transition-all flex flex-col items-center gap-4 group ${isActive ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-primary/20 bg-white'}`}
+            >
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all ${isActive ? 'bg-primary text-white shadow-xl' : 'bg-gray-50 text-gray-400 group-hover:scale-110'}`}>
+                <Icon size={32} />
+              </div>
+              <span className={`text-sm font-black uppercase tracking-widest ${isActive ? 'text-primary' : 'text-gray-400'}`}>{opt.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selService && (
+        <div className="flex flex-wrap items-center gap-3 p-2 bg-gray-50 rounded-2xl border border-gray-100 animate-slide-up">
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mr-2">Target Role:</span>
+          {allowedRoles.map(role => (
+            <button 
+              key={role} onClick={() => { setSelRole(role); setIsFormOpen(false); }}
+              className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selRole === role ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-500 hover:bg-primary/10'}`}
+            >
+              {ROLE_LABELS[role] || role}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selRole && (
+        <div className="space-y-6 animate-slide-up">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Active Slabs for {selService} - {ROLE_LABELS[selRole]}</h3>
+              {!isAdmin && <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 flex items-center gap-1"><ShieldAlert size={10} /> Inheritance and Deletion policy active</p>}
+            </div>
+            <button onClick={() => { setEditingSlab(null); setIsFormOpen(!isFormOpen); }} className="btn-premium btn-premium-secondary px-6 py-2.5 text-[10px]">
+              {isFormOpen ? <X size={14} className="mr-2" /> : <Plus size={14} className="mr-2" />}
+              {isFormOpen ? 'CANCEL' : 'ADD SLAB'}
+            </button>
+          </div>
+
+          {isFormOpen && !editingSlab && (
+            <ChargeForm 
+              context={{ serviceType: selService, applyOnRole: selRole }}
+              onCancel={() => setIsFormOpen(false)}
+              onSaved={() => { fetchData(); setIsFormOpen(false); }}
+            />
+          )}
+
+          <div className="glass-panel overflow-hidden border border-gray-100 shadow-sm rounded-3xl bg-white">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50/50">
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Range (Min - Max)</th>
+                  {!isAdmin && <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Inherited Charge</th>}
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">{isAdmin ? 'Default Charge' : 'New Charge'}</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredSlabs.length === 0 ? (
+                  <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">No slabs configured</td></tr>
+                ) : (
+                  filteredSlabs.map(s => {
+                    const inherited = findInheritedForRange(s.minAmount, s.maxAmount);
+                    return (
+                      <React.Fragment key={s.id}>
+                        <tr className="hover:bg-gray-50/30 transition-all">
+                          <td className="p-4 text-xs font-bold text-gray-600">{formatRange(s.minAmount, s.maxAmount)}</td>
+                          {!isAdmin && (
+                            <td className="p-4 text-right">
+                              {inherited ? (
+                                <div className="flex flex-col items-end">
+                                  <span className="font-black text-gray-400 text-xs">{formatCharge(inherited.commissionType, inherited.commissionValue)}</span>
+                                  <span className="text-[8px] font-black text-gray-300 uppercase tracking-tighter">By {inherited.setBy?.role}</span>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-black text-gray-300 uppercase">N/A</span>
+                              )}
+                            </td>
+                          )}
+                          <td className="p-4 text-right font-black text-emerald-600 text-sm">{formatCharge(s.commissionType, s.commissionValue)}</td>
+                          <td className="p-4 text-center">
+                            <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${s.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{s.isActive ? 'Active' : 'Paused'}</span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => setEditingSlab(editingSlab?.id === s.id ? null : s)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={14} /></button>
+                              {isAdmin && <button onClick={() => handleDelete(s.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>}
+                            </div>
+                          </td>
+                        </tr>
+                        {editingSlab?.id === s.id && (
+                          <tr><td colSpan="5" className="p-4 bg-gray-50/30"><ChargeForm initialData={s} context={{ serviceType: selService, applyOnRole: selRole }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderOverrideSelector = () => (
+    <div className="space-y-8 animate-slide-up">
+      <div className="flex flex-col gap-4">
+        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Search Managed User</label>
+        <UserSearch onSelect={u => { setTargetUser(u); setIsFormOpen(false); }} placeholder="Search user by name or email..." className="h-14" />
+      </div>
+
+      {targetUser && (
+        <div className="space-y-8 animate-slide-up">
+          <div className="p-8 bg-primary/5 rounded-3xl border border-primary/10 flex flex-wrap justify-between items-center gap-6">
+            <div className="flex items-center gap-6">
+              <div className="w-20 h-20 rounded-full bg-white shadow-xl flex items-center justify-center text-primary text-3xl font-black">
+                {targetUser.profile?.ownerName?.charAt(0) || 'U'}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                   <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase">{targetUser.profile?.ownerName || 'User Profile'}</h2>
+                   <span className="px-3 py-1 bg-white rounded-full text-[9px] font-black text-primary border border-primary/20">{targetUser.role}</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs font-bold text-gray-400 uppercase">
+                  <span>{targetUser.email}</span>
+                  <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                  <span>{targetUser.profile?.mobileNumber}</span>
+                  <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                  <span className="text-emerald-600 font-black">₹{Number(targetUser.wallet?.balance || 0).toFixed(2)}</span>
+                </div>
+                <div className="text-[10px] text-gray-400 font-bold truncate max-w-[300px]">{targetUser.profile?.fullAddress}</div>
+              </div>
+            </div>
+            <div className="flex gap-3">
+               <button onClick={() => { setEditingSlab(null); setIsFormOpen(!isFormOpen); }} className="btn-premium btn-premium-primary px-8 h-12 shadow-lg">
+                 {isFormOpen ? 'CANCEL' : 'ADD OVERRIDE'}
+               </button>
+               <button onClick={() => setTargetUser(null)} className="btn-premium btn-premium-secondary p-3 rounded-full hover:rotate-90 transition-all"><X size={20} /></button>
+            </div>
+          </div>
+
+          {isFormOpen && !editingSlab && (
+            <div className="animate-slide-up">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                 <select value={selService || 'PAYOUT'} onChange={e => setSelService(e.target.value)} className="form-input h-12 font-bold text-xs uppercase">
+                    {SERVICE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} Override</option>)}
+                 </select>
+              </div>
+              <ChargeForm 
+                context={{ targetUserId: targetUser.id, serviceType: selService || 'PAYOUT' }}
+                onCancel={() => setIsFormOpen(false)}
+                onSaved={() => { fetchData(); setIsFormOpen(false); }}
+              />
+            </div>
+          )}
+
+          <div className="glass-panel overflow-hidden border border-gray-100 shadow-sm rounded-3xl bg-white">
+             <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50/50">
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Service</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Range (Min - Max)</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Charge</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredOverrides.length === 0 ? (
+                  <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">No overrides set for this user</td></tr>
+                ) : (
+                  filteredOverrides.map(o => (
+                    <React.Fragment key={o.id}>
+                      <tr className="hover:bg-gray-50/30 transition-all">
+                        <td className="p-4 font-black text-gray-900 text-[10px] uppercase">
+                          <div className="flex flex-col">
+                            <span className="font-black">{o.serviceType}</span>
+                            {o.setBy && (
+                              <span className="text-[8px] text-gray-400 font-black tracking-tighter">SET BY: {o.setBy?.profile?.ownerName || o.setBy?.email} ({o.setBy?.role})</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4 text-xs font-bold text-gray-600">{formatRange(o.minAmount, o.maxAmount)}</td>
+                        <td className="p-4 text-right font-black text-emerald-600 text-sm">{formatCharge(o.commissionType, o.commissionValue)}</td>
+                        <td className="p-4 text-center">
+                          <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${o.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{o.isActive ? 'Active' : 'Paused'}</span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => setEditingSlab(editingSlab?.id === o.id ? null : o)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={14} /></button>
+                            {isAdmin && <button onClick={() => handleDelete(o.id, true)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>}
+                          </div>
+                        </td>
+                      </tr>
+                      {editingSlab?.id === o.id && (
+                        <tr><td colSpan="5" className="p-4 bg-gray-50/30"><ChargeForm initialData={o} context={{ targetUserId: targetUser.id, serviceType: o.serviceType }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
+                      )}
+                    </React.Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex-col gap-6">
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+    <div className="flex-col gap-6 pb-20">
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-10 animate-slide-up">
         <div>
-          <h1 className="text-2xl font-bold">Charge Setting</h1>
-          <p className="text-muted text-sm mt-1">
-            {canManageRates
-              ? 'Manage direct-child default rates, user overrides, and your own effective charges.'
-              : 'Review the final charges that currently apply to your account.'}
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight uppercase">Charge Setting</h1>
+          <p className="text-gray-400 font-bold mt-1 uppercase text-xs tracking-widest">
+            {canManageRates ? 'Manage default slabs and user-specific overrides' : 'Your applicable transaction charges'}
           </p>
         </div>
-
-        <div className="flex gap-2">
-          {canManageRates && activeTab === 'defaults' && (
-            <button
-              onClick={() => {
-                setCurrentDefaultRate(null);
-                setIsDefaultModalOpen(true);
-              }}
-              className="btn btn-primary"
-              type="button"
-            >
-              <Plus size={18} /> Add Default Rate
-            </button>
-          )}
-
-          {canManageRates && activeTab === 'overrides' && (
-            <button
-              onClick={() => {
-                setCurrentOverride(null);
-                setIsOverrideModalOpen(true);
-              }}
-              className="btn btn-primary"
-              type="button"
-              disabled={overrideTargets.length === 0}
-            >
-              <UserPlus size={18} /> Add User Override
-            </button>
-          )}
-        </div>
+        <button onClick={fetchData} className="p-4 bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
+          <RefreshCw className={loading ? 'animate-spin' : ''} size={20} />
+        </button>
       </div>
 
-      <div className="flex gap-4 border-b border-gray-200 mb-6">
+      <div className="flex gap-4 border-b border-gray-200 mb-10 animate-slide-up">
         {canManageRates && (
-          <TabButton active={activeTab === 'defaults'} label="Default Rates" onClick={() => setActiveTab('defaults')} />
+          <button onClick={() => {setActiveTab('defaults'); setEditingSlab(null); setIsFormOpen(false);}} className={`pb-4 px-8 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === 'defaults' ? 'text-primary border-b-2 border-primary' : 'text-gray-400'}`}>Default Rates</button>
         )}
         {canManageRates && (
-          <TabButton active={activeTab === 'overrides'} label="User Overrides" onClick={() => setActiveTab('overrides')} />
+          <button onClick={() => {setActiveTab('overrides'); setEditingSlab(null); setIsFormOpen(false);}} className={`pb-4 px-8 text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === 'overrides' ? 'text-primary border-b-2 border-primary' : 'text-gray-400'}`}>User Overrides</button>
         )}
-        {showMyCharges && (
-          <TabButton active={activeTab === 'myCharges'} label="My Charges" onClick={() => setActiveTab('myCharges')} />
+        {!canManageRates && (
+          <button className="pb-4 px-8 text-[11px] font-black uppercase tracking-widest text-primary border-b-2 border-primary">My Effective Charges</button>
         )}
       </div>
-
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-4">{error}</div>}
 
       {loading ? (
-        <div className="card p-12 text-center text-gray-500">Loading rate settings...</div>
+        <div className="p-20 text-center"><RefreshCw className="animate-spin text-primary mx-auto" size={48} /></div>
       ) : (
         <>
-          {activeTab === 'defaults' && canManageRates && (
-            <div className="space-y-6">
-              <div className="card">
-                <div className="p-4 border-b bg-gray-50/30">
-                  <h2 className="font-bold text-sm uppercase text-gray-700 tracking-wider">My Custom Default Rates</h2>
-                  <p className="text-xs text-gray-500">Rates you've specifically defined for your direct children.</p>
-                </div>
-                <div className="data-table-container border-none shadow-none rounded-none">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Service</th>
-                        <th>Child Role</th>
-                        <th>Range</th>
-                        <th>Charge</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {defaultRates.length === 0 ? (
-                        <tr>
-                          <td colSpan="6" className="text-center py-10 text-gray-400 text-sm italic">
-                            No custom default rates configured. Inherited rates will apply.
-                          </td>
+          {activeTab === 'defaults' && renderDefaultSelector()}
+          {activeTab === 'overrides' && renderOverrideSelector()}
+          {activeTab === 'myCharges' && (
+             <div className="glass-panel overflow-hidden border border-gray-100 shadow-sm rounded-3xl bg-white animate-slide-up">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50/50">
+                      <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Service</th>
+                      <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Range</th>
+                      <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">My Charge</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {effective.length === 0 ? (
+                      <tr><td colSpan="3" className="p-20 text-center text-gray-400 font-bold uppercase text-xs tracking-widest">No charges applicable to your account</td></tr>
+                    ) : (
+                      effective.map((r, i) => (
+                        <tr key={i} className="hover:bg-gray-50/30 transition-all">
+                          <td className="p-6 font-black text-gray-900 text-xs uppercase">{r.serviceType}</td>
+                          <td className="p-6 text-xs font-bold text-gray-500">{formatRange(r.minAmount, r.maxAmount)}</td>
+                          <td className="p-6 text-right font-black text-emerald-600 text-sm">{formatCharge(r.commissionType, r.commissionValue)}</td>
                         </tr>
-                      ) : (
-                        defaultRates.map((rate) => (
-                          <tr key={rate.id}>
-                            <td className="font-semibold text-primary">{SERVICE_LABELS[rate.serviceType] || rate.serviceType}</td>
-                            <td>{ROLE_LABELS[rate.applyOnRole] || rate.applyOnRole}</td>
-                            <td>{formatRange(rate.minAmount, rate.maxAmount)}</td>
-                            <td className="font-medium text-emerald-600">{formatCharge(rate.commissionType, rate.commissionValue)}</td>
-                            <td>
-                              <StatusBadge isActive={rate.isActive} />
-                            </td>
-                            <td>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => {
-                                    setCurrentDefaultRate(rate);
-                                    setIsDefaultModalOpen(true);
-                                  }}
-                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                  type="button"
-                                >
-                                  <Edit2 size={16} />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteDefaultRate(rate.id)}
-                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  type="button"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'overrides' && canManageRates && (
-            <div className="space-y-4">
-              {overrideTargets.length === 0 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                  You do not have any active managed users yet, so there are no override targets available.
-                </div>
-              )}
-
-              <div className="card">
-                <div className="data-table-container border-none shadow-none rounded-none">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Target User</th>
-                        <th>Service</th>
-                        <th>Range</th>
-                        <th>Charge</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {userOverrides.length === 0 ? (
-                        <tr>
-                          <td colSpan="6" className="text-center py-10 text-gray-400">
-                            No user overrides configured yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        userOverrides.map((override) => (
-                          <tr key={override.id}>
-                            <td>
-                              <div className="flex flex-col">
-                                <span className="font-medium">
-                                  {override.targetUser?.profile?.ownerName || override.targetUser?.profile?.shopName || override.targetUser?.email}
-                                </span>
-                                <span className="text-xs text-gray-400">
-                                  {ROLE_LABELS[override.targetUser?.role] || override.targetUser?.role} - {override.targetUser?.email}
-                                </span>
-                              </div>
-                            </td>
-                            <td>{SERVICE_LABELS[override.serviceType] || override.serviceType}</td>
-                            <td>{formatRange(override.minAmount, override.maxAmount)}</td>
-                            <td className="font-medium text-emerald-600">
-                              {formatCharge(override.commissionType, override.commissionValue)}
-                            </td>
-                            <td>
-                              <StatusBadge isActive={override.isActive} />
-                            </td>
-                            <td>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => {
-                                    setCurrentOverride(override);
-                                    setIsOverrideModalOpen(true);
-                                  }}
-                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                                  type="button"
-                                >
-                                  <Edit2 size={16} />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteOverride(override.id)}
-                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                                  type="button"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {showMyCharges && activeTab === 'myCharges' && (
-            <div className="space-y-6">
-              {inheritedDefaultRates.length > 0 && (
-                <div className="card">
-                  <div className="p-4 border-b bg-amber-50/30 flex items-center gap-3">
-                    <ShieldCheck size={18} className="text-amber-600" />
-                    <div>
-                      <h2 className="font-bold text-sm uppercase text-amber-800 tracking-wider">Inherited Default Rates</h2>
-                      <p className="text-xs text-amber-600">These are the default rates coming from your parent.</p>
-                    </div>
-                  </div>
-                  <div className="data-table-container border-none shadow-none rounded-none">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Service</th>
-                          <th>Apply On</th>
-                          <th>Set By</th>
-                          <th>Range</th>
-                          <th>Charge</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inheritedDefaultRates.map((rate) => (
-                          <tr key={`my-inherited-${rate.id}`} className="bg-amber-50/10">
-                            <td className="font-semibold">{SERVICE_LABELS[rate.serviceType] || rate.serviceType}</td>
-                            <td>{ROLE_LABELS[rate.applyOnRole] || rate.applyOnRole}</td>
-                            <td>
-                              <div className="text-xs">
-                                <div className="font-bold text-gray-700">{rate.setBy?.profile?.ownerName || rate.setBy?.email}</div>
-                                <div className="text-gray-400">({ROLE_LABELS[rate.setBy?.role] || rate.setBy?.role})</div>
-                              </div>
-                            </td>
-                            <td>{formatRange(rate.minAmount, rate.maxAmount)}</td>
-                            <td className="font-medium text-amber-600">{formatCharge(rate.commissionType, rate.commissionValue)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+             </div>
           )}
         </>
       )}
-
-      <DefaultRateModal
-        isOpen={isDefaultModalOpen}
-        onClose={() => setIsDefaultModalOpen(false)}
-        onSaved={fetchData}
-        initialData={currentDefaultRate}
-        allowedRoles={allowedRoles}
-      />
-
-      <UserOverrideModal
-        isOpen={isOverrideModalOpen}
-        onClose={() => setIsOverrideModalOpen(false)}
-        onSaved={fetchData}
-        initialData={currentOverride}
-        targets={overrideTargets}
-      />
     </div>
   );
 }

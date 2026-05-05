@@ -31,12 +31,6 @@ const EMPTY_CREATE_FORM = {
   parentId: '',
 };
 
-const EMPTY_FILES = {
-  aadhaarFront: null,
-  aadhaarBack: null,
-  panCard: null,
-};
-
 const buildEditForm = (user) => ({
   email: user?.email || '',
   ownerName: user?.profile?.ownerName || '',
@@ -61,66 +55,32 @@ const formatSummaryPrimary = (summary) => {
   return summary.ownerName || summary.shopName || summary.email;
 };
 
-const formatSummarySecondary = (summary) => {
-  if (!summary) return '';
-  return `${ROLE_LABELS[summary.role] || summary.role} • ${summary.email}`;
+const formatChargeValue = (type, value) => {
+  if (type === 'PERCENTAGE') return `${Number(value || 0).toFixed(2)}%`;
+  return `₹ ${Number(value || 0).toFixed(2)}`;
 };
 
 const HierarchyStack = ({ user }) => (
   <div className="space-y-1 text-xs text-gray-500">
-    <div>
-      <span className="font-medium text-gray-700">Admin:</span> {formatSummaryPrimary(user?.upline?.admin)}
-    </div>
-    <div>
-      <span className="font-medium text-gray-700">Super:</span> {formatSummaryPrimary(user?.upline?.super)}
-    </div>
-    <div>
-      <span className="font-medium text-gray-700">Distributor:</span> {formatSummaryPrimary(user?.upline?.distributor)}
+    <div className="flex items-center gap-1">
+      <span className="font-medium text-gray-700">Parent:</span> 
+      <span className="truncate max-w-[120px]">{formatSummaryPrimary(user?.createdBy) || '-'}</span>
     </div>
   </div>
 );
 
-const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
+const CreateUserView = ({ onBack, onUserCreated }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [formData, setFormData] = useState(EMPTY_CREATE_FORM);
-  const [files, setFiles] = useState(EMPTY_FILES);
-  const [potentialParents, setPotentialParents] = useState([]);
+  const [formData, setFormData] = useState({
+    ...EMPTY_CREATE_FORM,
+    role: getDefaultRole(user?.role),
+    parentId: user?.id || '',
+  });
+  const [selectedParent, setSelectedParent] = useState(user);
 
   const availableRoles = getAvailableRoles(user?.role);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setError('');
-    setLoading(false);
-    setFiles(EMPTY_FILES);
-    setFormData({
-      ...EMPTY_CREATE_FORM,
-      role: getDefaultRole(user?.role),
-      parentId: user?.id || '',
-    });
-    fetchPotentialParents();
-  }, [isOpen, user?.id, user?.role]);
-
-  const fetchPotentialParents = async () => {
-    try {
-      const { data } = await api.get('/users?limit=200');
-      if (data.success) {
-        setPotentialParents(data.users);
-      }
-    } catch (err) {
-      console.error('Failed to fetch parents:', err);
-    }
-  };
-
-  const getEligibleParents = () => {
-    const hierarchy = ['ADMIN', 'SUPER', 'DISTRIBUTOR', 'RETAILER'];
-    const currentRoleIdx = hierarchy.indexOf(formData.role);
-    return potentialParents.filter(p => hierarchy.indexOf(p.role) < currentRoleIdx);
-  };
-
-  if (!isOpen) return null;
 
   const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -131,13 +91,12 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
 
     const data = new FormData();
     Object.entries(formData).forEach(([key, value]) => data.append(key, value));
-    // KYC files omitted as per user request to hide KYC for now
 
     try {
       const res = await api.post('/users', data);
       if (res.data.success) {
         onUserCreated();
-        onClose();
+        onBack();
       } else {
         setError(res.data.message || 'Failed to create user');
       }
@@ -149,180 +108,190 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-slide-up border border-gray-100">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Create New User</h2>
-            <p className="text-sm text-gray-500 mt-1">Register a new partner in your network.</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
-            <X size={20} />
-          </button>
+    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden animate-fade-in">
+      <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
+        <div>
+          <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">Create New User</h2>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Register a new partner in your network</p>
         </div>
+        <button onClick={onBack} className="btn-premium btn-premium-secondary px-6">
+          <X size={18} className="mr-2" /> Back to List
+        </button>
+      </div>
 
-        <div className="flex-1 overflow-y-auto p-8">
-          <form id="create-user-form" onSubmit={handleSubmit} className="space-y-8">
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-700">
-                <Plus size={20} className="rotate-45" />
-                <span className="text-sm font-medium">{error}</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
-                  <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Account Settings</h3>
-                </div>
-                
-                <div className="form-group">
-                  <label className="form-label">ASSIGNED ROLE</label>
-                  <select 
-                    name="role" value={formData.role} onChange={handleInputChange} 
-                    className="form-input form-select" required
-                  >
-                    {availableRoles.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">EMAIL ADDRESS</label>
-                  <input 
-                    type="email" name="email" required 
-                    value={formData.email} onChange={handleInputChange} 
-                    className="form-input" placeholder="user@example.com"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">PASSWORD</label>
-                  <input 
-                    type="password" name="password" required minLength="6"
-                    value={formData.password} onChange={handleInputChange} 
-                    className="form-input" placeholder="Min 6 characters"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">PARENT / UPLINE</label>
-                  <select 
-                    name="parentId" value={formData.parentId} onChange={handleInputChange} 
-                    className="form-input form-select"
-                  >
-                    <option value={user?.id}>Myself ({user?.email})</option>
-                    {getEligibleParents().map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.profile?.ownerName || p.email} ({ROLE_LABELS[p.role]})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
-                  <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Business Profile</h3>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">OWNER FULL NAME</label>
-                  <input 
-                    type="text" name="ownerName" required 
-                    value={formData.ownerName} onChange={handleInputChange} 
-                    className="form-input" placeholder="e.g. John Doe"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">SHOP / BUSINESS NAME</label>
-                  <input 
-                    type="text" name="shopName" required 
-                    value={formData.shopName} onChange={handleInputChange} 
-                    className="form-input" placeholder="e.g. Abhee Enterprises"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">MOBILE NUMBER</label>
-                  <input 
-                    type="tel" name="mobileNumber" required minLength="10" maxLength="10" 
-                    value={formData.mobileNumber} onChange={handleInputChange} 
-                    className="form-input" placeholder="10-digit number"
-                  />
-                </div>
-              </div>
+      <div className="p-10">
+        <form id="create-user-form" onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-12">
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-700 animate-shake">
+              <Plus size={20} className="rotate-45" />
+              <span className="text-sm font-bold uppercase">{error}</span>
             </div>
+          )}
 
-            <div className="space-y-6 pt-4">
-              <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
-                <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Business Address</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
+            <div className="space-y-8">
+              <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black text-xs">01</div>
+                <h3 className="font-black text-gray-900 uppercase tracking-widest text-xs">Account Settings</h3>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="form-group md:col-span-1">
-                  <label className="form-label">FULL ADDRESS</label>
-                  <input 
-                    type="text" name="fullAddress" required 
-                    value={formData.fullAddress} onChange={handleInputChange} 
-                    className="form-input" placeholder="House/Shop No, Area..."
+              <div className="form-group">
+                <label className="form-label text-[10px]">ASSIGNED ROLE</label>
+                <select 
+                  name="role" value={formData.role} onChange={handleInputChange} 
+                  className="form-input form-select h-12 font-bold" required
+                >
+                  {availableRoles.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-[10px]">PARENT / UPLINE</label>
+                {selectedParent ? (
+                  <div className="flex items-center justify-between p-4 bg-primary-light/50 border border-primary/20 rounded-xl animate-fade-in">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-primary">
+                        <LogIn size={20} />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-gray-900">{selectedParent.profile?.ownerName || selectedParent.email}</div>
+                        <div className="text-[10px] text-gray-500 font-bold uppercase">{selectedParent.role}</div>
+                      </div>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => { setSelectedParent(null); setFormData({ ...formData, parentId: '' }); }} 
+                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                ) : (
+                  <UserSearch 
+                    onSelect={(u) => {
+                      setSelectedParent(u);
+                      setFormData({ ...formData, parentId: u?.id || '' });
+                    }} 
+                    placeholder="Search parent by name or email..."
                   />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">STATE</label>
-                  <input 
-                    type="text" name="state" required 
-                    value={formData.state} onChange={handleInputChange} 
-                    className="form-input" placeholder="e.g. Delhi"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">PIN CODE</label>
-                  <input 
-                    type="text" name="pinCode" required 
-                    value={formData.pinCode} onChange={handleInputChange} 
-                    className="form-input" placeholder="6-digit PIN"
-                  />
-                </div>
+                )}
+                <p className="text-[10px] text-gray-400 mt-1">Search and select the partner this user will be under.</p>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-[10px]">EMAIL ADDRESS</label>
+                <input 
+                  type="email" name="email" required 
+                  value={formData.email} onChange={handleInputChange} 
+                  className="form-input h-12 font-bold" placeholder="user@example.com"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-[10px]">PASSWORD</label>
+                <input 
+                  type="password" name="password" required minLength="6"
+                  value={formData.password} onChange={handleInputChange} 
+                  className="form-input h-12 font-bold" placeholder="Min 6 characters"
+                />
               </div>
             </div>
-          </form>
-        </div>
 
-        <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
-          <button 
-            type="button" onClick={onClose} 
-            className="btn-premium btn-premium-secondary" 
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button 
-            type="submit" form="create-user-form" 
-            className="btn-premium btn-premium-primary min-w-[140px]" 
-            disabled={loading}
-          >
-            {loading ? <RefreshCw className="animate-spin" size={18} /> : 'Create Account'}
-          </button>
-        </div>
+            <div className="space-y-8">
+              <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black text-xs">02</div>
+                <h3 className="font-black text-gray-900 uppercase tracking-widest text-xs">Business Profile</h3>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-[10px]">OWNER FULL NAME</label>
+                <input 
+                  type="text" name="ownerName" required 
+                  value={formData.ownerName} onChange={handleInputChange} 
+                  className="form-input h-12 font-bold" placeholder="e.g. John Doe"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-[10px]">SHOP / BUSINESS NAME</label>
+                <input 
+                  type="text" name="shopName" required 
+                  value={formData.shopName} onChange={handleInputChange} 
+                  className="form-input h-12 font-bold" placeholder="e.g. Abhee Enterprises"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label text-[10px]">MOBILE NUMBER</label>
+                <input 
+                  type="tel" name="mobileNumber" required minLength="10" maxLength="10" 
+                  value={formData.mobileNumber} onChange={handleInputChange} 
+                  className="form-input h-12 font-bold" placeholder="10-digit number"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-8 pt-8">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black text-xs">03</div>
+              <h3 className="font-black text-gray-900 uppercase tracking-widest text-xs">Business Address</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="form-group md:col-span-1">
+                <label className="form-label text-[10px]">FULL ADDRESS</label>
+                <input 
+                  type="text" name="fullAddress" required 
+                  value={formData.fullAddress} onChange={handleInputChange} 
+                  className="form-input h-12 font-bold" placeholder="House/Shop No, Area..."
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label text-[10px]">STATE</label>
+                <input 
+                  type="text" name="state" required 
+                  value={formData.state} onChange={handleInputChange} 
+                  className="form-input h-12 font-bold" placeholder="e.g. Delhi"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label text-[10px]">PIN CODE</label>
+                <input 
+                  type="text" name="pinCode" required 
+                  value={formData.pinCode} onChange={handleInputChange} 
+                  className="form-input h-12 font-bold" placeholder="6-digit PIN"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-4 pt-10 border-t border-gray-50">
+            <button 
+              type="button" onClick={onBack} 
+              className="btn-premium btn-premium-secondary px-10 h-14" 
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="btn-premium btn-premium-primary min-w-[240px] h-14 shadow-xl" 
+              disabled={loading}
+            >
+              {loading ? <RefreshCw className="animate-spin" size={20} /> : 'Create User Account'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 };
 
-const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
+const EditUserForm = ({ user, onCancel, onUpdated }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [formData, setFormData] = useState({});
-
-  useEffect(() => {
-    if (!isOpen || !user) return;
-    setError('');
-    setLoading(false);
-    setFormData(buildEditForm(user));
-  }, [isOpen, user]);
-
-  if (!isOpen || !user) return null;
+  const [formData, setFormData] = useState(buildEditForm(user));
 
   const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -334,8 +303,8 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
     try {
       const res = await api.patch(`/users/${user.id}`, formData);
       if (res.data.success) {
-        onUserUpdated();
-        onClose();
+        onUpdated();
+        onCancel();
       } else {
         setError(res.data.message || 'Failed to update user');
       }
@@ -347,150 +316,60 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-slide-up border border-gray-100">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Edit User Profile</h2>
-            <p className="text-sm text-gray-500 mt-1">Update profile information and business details.</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
-            <X size={20} />
-          </button>
+    <form onSubmit={handleSubmit} className="p-6 bg-blue-50/30 rounded-2xl border border-blue-100 space-y-6 animate-slide-down">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest">Edit User Profile: {user.email}</h3>
+        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+      </div>
+      
+      {error && <div className="text-xs text-red-600 font-bold">{error}</div>}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="form-group">
+          <label className="form-label text-[10px]">OWNER FULL NAME</label>
+          <input 
+            type="text" name="ownerName" required 
+            value={formData.ownerName} onChange={handleInputChange} 
+            className="form-input h-10 font-bold"
+          />
         </div>
-
-        <div className="flex-1 overflow-y-auto p-8">
-          <form id="edit-user-form" onSubmit={handleSubmit} className="space-y-8">
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-700">
-                <Edit2 size={20} />
-                <span className="text-sm font-medium">{error}</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
-                  <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Account Information</h3>
-                </div>
-                
-                <div className="form-group">
-                  <label className="form-label">EMAIL ADDRESS</label>
-                  <input 
-                    type="email" name="email" required 
-                    value={formData.email || ''} onChange={handleInputChange} 
-                    className="form-input bg-gray-50 cursor-not-allowed" 
-                    disabled
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Username cannot be changed.</p>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">CURRENT ROLE</label>
-                  <input 
-                    type="text" value={ROLE_LABELS[user.role] || user.role} 
-                    className="form-input bg-gray-50 cursor-not-allowed" 
-                    disabled 
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
-                  <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Profile Details</h3>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">OWNER FULL NAME</label>
-                  <input 
-                    type="text" name="ownerName" required 
-                    value={formData.ownerName || ''} onChange={handleInputChange} 
-                    className="form-input" placeholder="e.g. John Doe"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">SHOP / BUSINESS NAME</label>
-                  <input 
-                    type="text" name="shopName" required 
-                    value={formData.shopName || ''} onChange={handleInputChange} 
-                    className="form-input" placeholder="e.g. Abhee Enterprises"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">MOBILE NUMBER</label>
-                  <input 
-                    type="tel" name="mobileNumber" required minLength="10" maxLength="10" 
-                    value={formData.mobileNumber || ''} onChange={handleInputChange} 
-                    className="form-input" placeholder="10-digit number"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6 pt-4">
-              <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
-                <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Business Address</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="form-group md:col-span-1">
-                  <label className="form-label">FULL ADDRESS</label>
-                  <input 
-                    type="text" name="fullAddress" required 
-                    value={formData.fullAddress || ''} onChange={handleInputChange} 
-                    className="form-input" placeholder="House/Shop No, Area..."
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">STATE</label>
-                  <input 
-                    type="text" name="state" required 
-                    value={formData.state || ''} onChange={handleInputChange} 
-                    className="form-input" placeholder="e.g. Delhi"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">PIN CODE</label>
-                  <input 
-                    type="text" name="pinCode" required 
-                    value={formData.pinCode || ''} onChange={handleInputChange} 
-                    className="form-input" placeholder="6-digit PIN"
-                  />
-                </div>
-              </div>
-            </div>
-          </form>
+        <div className="form-group">
+          <label className="form-label text-[10px]">SHOP NAME</label>
+          <input 
+            type="text" name="shopName" required 
+            value={formData.shopName} onChange={handleInputChange} 
+            className="form-input h-10 font-bold"
+          />
         </div>
-
-        <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
-          <button 
-            type="button" onClick={onClose} 
-            className="btn-premium btn-premium-secondary" 
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button 
-            type="submit" form="edit-user-form" 
-            className="btn-premium btn-premium-primary min-w-[140px]" 
-            disabled={loading}
-          >
-            {loading ? <RefreshCw className="animate-spin" size={18} /> : 'Update User'}
-          </button>
+        <div className="form-group">
+          <label className="form-label text-[10px]">MOBILE NUMBER</label>
+          <input 
+            type="tel" name="mobileNumber" required 
+            value={formData.mobileNumber} onChange={handleInputChange} 
+            className="form-input h-10 font-bold"
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label text-[10px]">STATE</label>
+          <input 
+            type="text" name="state" required 
+            value={formData.state} onChange={handleInputChange} 
+            className="form-input h-10 font-bold"
+          />
         </div>
       </div>
-    </div>
+      
+      <div className="flex justify-end gap-3">
+        <button type="button" onClick={onCancel} className="btn-premium btn-premium-secondary py-2 text-[10px]">Cancel</button>
+        <button type="submit" disabled={loading} className="btn-premium btn-premium-primary py-2 px-6 text-[10px]">
+          {loading ? 'Updating...' : 'Update Profile'}
+        </button>
+      </div>
+    </form>
   );
 };
 
-function formatChargeValue(type, value) {
-  if (type === 'PERCENTAGE') return `${Number(value || 0).toFixed(2)}%`;
-  return `₹ ${Number(value || 0).toFixed(2)}`;
-}
-
-const UserChargesModal = ({ isOpen, onClose, targetUser }) => {
+const UserChargesForm = ({ targetUser, onCancel }) => {
   const [overrides, setOverrides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -520,26 +399,8 @@ const UserChargesModal = ({ isOpen, onClose, targetUser }) => {
   };
 
   useEffect(() => {
-    if (isOpen && targetUser) {
-      fetchOverrides();
-      resetForm();
-    }
-  }, [isOpen, targetUser]);
-
-  const resetForm = () => {
-    setFormData({
-      serviceType: 'PAYOUT',
-      commissionType: 'FLAT',
-      commissionValue: '',
-      minAmount: '',
-      maxAmount: '',
-      isActive: true,
-    });
-    setEditingId(null);
-    setError('');
-  };
-
-  if (!isOpen || !targetUser) return null;
+    fetchOverrides();
+  }, [targetUser]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -565,222 +426,86 @@ const UserChargesModal = ({ isOpen, onClose, targetUser }) => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Remove this charge slab?')) return;
-    try {
-      await api.delete(`/commissions/overrides/${id}`);
-      fetchOverrides();
-    } catch (err) {
-      setError('Failed to delete charge');
-    }
+  const resetForm = () => {
+    setFormData({
+      serviceType: 'PAYOUT',
+      commissionType: 'FLAT',
+      commissionValue: '',
+      minAmount: '',
+      maxAmount: '',
+      isActive: true,
+    });
+    setEditingId(null);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-slide-up border border-gray-100">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">User Special Charges</h2>
-            <p className="text-sm text-gray-500 mt-1">Configure custom service rates for <span className="font-bold text-primary">{targetUser.profile?.ownerName || targetUser.email}</span></p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
-            <X size={20} />
-          </button>
-        </div>
+    <div className="p-6 bg-emerald-50/30 rounded-2xl border border-emerald-100 space-y-6 animate-slide-down">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Custom Charges: {targetUser.profile?.ownerName || targetUser.email}</h3>
+        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+      </div>
 
-        <div className="flex-1 overflow-y-auto p-8 space-y-10">
-          {/* List Existing Overrides */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-bold uppercase text-gray-400 tracking-wider">Active Charge Overrides</h3>
-              <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-bold">{overrides.length} Slabs</span>
-            </div>
-            
-            {loading ? (
-              <div className="py-12 flex flex-col items-center justify-center text-gray-400">
-                <RefreshCw className="animate-spin mb-2" size={24} />
-                <p className="text-sm">Fetching overrides...</p>
-              </div>
-            ) : overrides.length === 0 ? (
-              <div className="py-12 text-center text-gray-400 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-3">
-                  <Banknote className="text-gray-300" size={24} />
-                </div>
-                <p className="text-sm font-medium">No custom charges set for this user.</p>
-                <p className="text-xs mt-1">Add a new slab below to override default rates.</p>
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="space-y-4">
+          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Active Overrides</p>
+          <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2">
+            {overrides.length === 0 ? (
+              <div className="text-[10px] text-gray-400 font-bold italic">No custom charges set.</div>
             ) : (
-              <div className="data-table-container border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                <table className="data-table">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th>Service</th>
-                      <th>Range</th>
-                      <th>Charge</th>
-                      <th className="text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overrides.map((ov) => (
-                      <tr key={ov.id}>
-                        <td className="font-bold text-primary">{ov.serviceType}</td>
-                        <td className="text-xs">₹{Number(ov.minAmount).toFixed(0)} - {ov.maxAmount ? `₹${Number(ov.maxAmount).toFixed(0)}` : 'Max'}</td>
-                        <td className="font-bold text-emerald-600">{formatChargeValue(ov.commissionType, ov.commissionValue)}</td>
-                        <td className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <button 
-                              onClick={() => {
-                                setEditingId(ov.id);
-                                setFormData({
-                                  serviceType: ov.serviceType,
-                                  commissionType: ov.commissionType,
-                                  commissionValue: ov.commissionValue,
-                                  minAmount: ov.minAmount,
-                                  maxAmount: ov.maxAmount === null ? '' : ov.maxAmount,
-                                  isActive: ov.isActive,
-                                });
-                              }}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(ov.id)}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-md"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              overrides.map(ov => (
+                <div key={ov.id} className="flex items-center justify-between p-3 bg-white border border-emerald-100 rounded-xl">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-gray-900">{ov.serviceType}</span>
+                    <span className="text-[9px] text-gray-500 font-bold">₹{ov.minAmount}-{ov.maxAmount || 'Max'}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-black text-emerald-600">{formatChargeValue(ov.commissionType, ov.commissionValue)}</span>
+                    <button onClick={() => {
+                      setEditingId(ov.id);
+                      setFormData({
+                        serviceType: ov.serviceType,
+                        commissionType: ov.commissionType,
+                        commissionValue: ov.commissionValue,
+                        minAmount: ov.minAmount,
+                        maxAmount: ov.maxAmount || '',
+                        isActive: ov.isActive
+                      });
+                    }} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Edit2 size={12} /></button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
-
-          <hr className="border-gray-100" />
-
-          {/* Add/Edit Form */}
-          <form onSubmit={handleSubmit} className="bg-gray-50/80 p-8 rounded-3xl border border-gray-100 space-y-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-bold uppercase text-gray-500 tracking-wider">
-                {editingId ? 'Edit Charge Slab' : 'Configure New Override Slab'}
-              </h3>
-              {editingId && (
-                <button type="button" onClick={resetForm} className="text-xs text-primary font-bold hover:underline">
-                  Cancel Edit
-                </button>
-              )}
-            </div>
-            
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-medium animate-shake">
-                {error}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="form-group">
-                <label className="form-label">Service Category</label>
-                <select 
-                  value={formData.serviceType} 
-                  onChange={(e) => setFormData({...formData, serviceType: e.target.value})}
-                  className="form-input form-select"
-                >
-                  <option value="PAYOUT">Payout Services</option>
-                  <option value="FUND_REQUEST">Wallet Top-up (Fund Request)</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Calculation Model</label>
-                <select 
-                  value={formData.commissionType} 
-                  onChange={(e) => setFormData({...formData, commissionType: e.target.value})}
-                  className="form-input form-select"
-                >
-                  <option value="FLAT">Flat Fee per Transaction (₹)</option>
-                  <option value="PERCENTAGE">Percentage of Volume (%)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="form-group">
-                <label className="form-label">Min Amount Slab</label>
-                <input 
-                  type="text"
-                  inputMode="decimal"
-                  required
-                  value={formData.minAmount}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                      setFormData({...formData, minAmount: val});
-                    }
-                  }}
-                  placeholder="0" className="form-input"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Max Amount Slab</label>
-                <input 
-                  type="text"
-                  inputMode="decimal"
-                  value={formData.maxAmount}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                      setFormData({...formData, maxAmount: val});
-                    }
-                  }}
-                  placeholder="∞" className="form-input"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Charge Value</label>
-                <input 
-                  type="text"
-                  inputMode="decimal"
-                  required
-                  value={formData.commissionValue}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                      setFormData({...formData, commissionValue: val});
-                    }
-                  }}
-                  placeholder="0.00" className="form-input"
-                />
-              </div>
-            </div>
-
-            <div className="flex pt-2">
-              <button type="submit" className="btn-premium btn-premium-primary ml-auto min-w-[200px]">
-                {editingId ? 'Update Override' : 'Apply New Charge Slab'}
-              </button>
-            </div>
-          </form>
         </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded-2xl border border-emerald-50">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{editingId ? 'Update' : 'Add New'} Slab</p>
+          <div className="grid grid-cols-2 gap-4">
+            <select value={formData.serviceType} onChange={e => setFormData({...formData, serviceType: e.target.value})} className="form-input h-10 text-[10px] font-bold">
+              <option value="PAYOUT">Payout</option>
+              <option value="FUND_REQUEST">Fund Request</option>
+            </select>
+            <select value={formData.commissionType} onChange={e => setFormData({...formData, commissionType: e.target.value})} className="form-input h-10 text-[10px] font-bold">
+              <option value="FLAT">Flat (₹)</option>
+              <option value="PERCENTAGE">Percentage (%)</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <input type="text" placeholder="Min" value={formData.minAmount} onChange={e => setFormData({...formData, minAmount: e.target.value})} className="form-input h-10 text-[10px] font-bold" />
+            <input type="text" placeholder="Max" value={formData.maxAmount} onChange={e => setFormData({...formData, maxAmount: e.target.value})} className="form-input h-10 text-[10px] font-bold" />
+            <input type="text" placeholder="Value" value={formData.commissionValue} onChange={e => setFormData({...formData, commissionValue: e.target.value})} className="form-input h-10 text-[10px] font-bold" />
+          </div>
+          <button type="submit" className="btn-premium btn-premium-primary w-full py-2 text-[10px] tracking-widest">SAVE CHARGE</button>
+        </form>
       </div>
     </div>
   );
 };
 
-const WalletHoldModal = ({ isOpen, onClose, user, onUpdated }) => {
+const WalletHoldForm = ({ user, onCancel, onUpdated }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [minimumHold, setMinimumHold] = useState(user?.wallet?.minimumHold || 0);
-
-  useEffect(() => {
-    if (isOpen && user) {
-      setMinimumHold(user.wallet?.minimumHold || 0);
-      setError('');
-    }
-  }, [isOpen, user]);
-
-  if (!isOpen || !user) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -791,64 +516,61 @@ const WalletHoldModal = ({ isOpen, onClose, user, onUpdated }) => {
       const res = await api.patch(`/users/${user.id}/wallet-hold`, { minimumHold });
       if (res.data.success) {
         onUpdated();
-        onClose();
+        onCancel();
       } else {
         setError(res.data.message || 'Failed to update hold');
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Server error occurred');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden flex flex-col animate-fade-in shadow-2xl">
-        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Banknote className="text-orange-500" size={24} /> Wallet Hold
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
-            <X size={20} />
-          </button>
+    <form onSubmit={handleSubmit} className="p-6 bg-orange-50/30 rounded-2xl border border-orange-100 space-y-6 animate-slide-down">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-black text-orange-900 uppercase tracking-widest">Wallet Control: {user.profile?.ownerName || user.email}</h3>
+        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 p-4 bg-white rounded-2xl shadow-sm border border-orange-50">
+             <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-500">
+               <Banknote size={24} />
+             </div>
+             <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase">Current Balance</p>
+                <p className="text-xl font-black text-gray-900">₹{Number(user.wallet?.balance || 0).toFixed(2)}</p>
+             </div>
+          </div>
+          <div className="p-4 bg-white/50 rounded-2xl border border-orange-50 space-y-2">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">User Details</p>
+            <div className="grid grid-cols-2 gap-4">
+               <div><p className="text-[9px] font-bold text-gray-400">Mobile</p><p className="text-[11px] font-bold">{user.profile?.mobileNumber}</p></div>
+               <div><p className="text-[9px] font-bold text-gray-400">Shop</p><p className="text-[11px] font-bold">{user.profile?.shopName}</p></div>
+               <div className="col-span-2"><p className="text-[9px] font-bold text-gray-400">Address</p><p className="text-[11px] font-bold truncate">{user.profile?.fullAddress}</p></div>
+            </div>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="bg-orange-50 p-3 rounded-lg text-xs text-orange-800 border border-orange-100">
-            Set a minimum balance that this user must always maintain in their wallet. They will not be able to use funds below this amount.
-          </div>
-
-          {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
-
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase">Minimum Hold Amount (₹)</label>
+        <div className="space-y-6">
+          <div className="form-group">
+            <label className="form-label text-[10px]">MINIMUM HOLD AMOUNT (₹)</label>
             <input 
-              type="text"
-              inputMode="decimal"
-              required 
-              value={minimumHold} 
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                  setMinimumHold(val);
-                }
-              }} 
-              className="w-full text-lg font-bold"
-              placeholder="0.00"
+              type="text" value={minimumHold} 
+              onChange={e => setMinimumHold(e.target.value)} 
+              className="form-input h-14 text-2xl font-black text-orange-600 focus:ring-orange-500"
             />
+            <p className="text-[10px] text-gray-500 font-bold mt-2 italic">User cannot use funds below this limit.</p>
           </div>
-
-          <div className="pt-4 flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="btn btn-outline" disabled={loading}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary min-w-[120px]" disabled={loading}>
-              {loading ? 'Saving...' : 'Set Hold'}
-            </button>
-          </div>
-        </form>
+          <button type="submit" disabled={loading} className="btn-premium btn-premium-primary w-full py-4 tracking-widest text-[11px] font-black shadow-xl">
+            {loading ? 'Processing...' : 'APPLY WALLET HOLD'}
+          </button>
+        </div>
       </div>
-    </div>
+    </form>
   );
 };
 
@@ -861,16 +583,10 @@ export default function UserManagement() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isChargesModalOpen, setIsChargesModalOpen] = useState(false);
-  const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [openMenuId, setOpenMenuId] = useState(null);
+  const [view, setView] = useState('list'); // 'list' or 'create'
+  const [activeAction, setActiveAction] = useState(null); // { userId, type: 'edit' | 'charges' | 'hold' }
 
   const canManageUsers = ['ADMIN', 'SUPER', 'DISTRIBUTOR'].includes(user.role);
-  const canDeleteUsers = ['ADMIN', 'SUPER', 'DISTRIBUTOR'].includes(user.role);
-  const canSetHold = ['ADMIN', 'SUPER', 'DISTRIBUTOR'].includes(user.role);
   const canImpersonate = ['ADMIN', 'SUPER', 'DISTRIBUTOR'].includes(user.role);
   const filterRoles = getAvailableRoles(user.role);
 
@@ -896,49 +612,24 @@ export default function UserManagement() {
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchUsers();
-    }, 500); // Debounce search
+    }, 500); 
     return () => clearTimeout(timer);
   }, [page, filterRole, filterStatus, searchQuery]);
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('[data-menu-container]')) {
-        setOpenMenuId(null);
-      }
-    };
-
-    if (openMenuId) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [openMenuId]);
-
-  const toggleStatus = async (userId, currentStatus) => {
+  const toggleStatus = async (userId) => {
+    if (!window.confirm('Toggle user status?')) return;
     try {
       const { data } = await api.patch(`/users/${userId}/toggle`);
       if (data.success) {
-        window.location.reload();
+        fetchUsers();
       }
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update status');
     }
   };
 
-  const deleteUser = async (userId, userName) => {
+  const loginAsUser = async (userId) => {
     try {
-      const { data } = await api.delete(`/users/${userId}`);
-      if (data.success) {
-        alert('User deleted successfully');
-        window.location.reload();
-      }
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to delete user');
-    }
-  };
-
-  const loginAsUser = async (userId, userEmail) => {
-    try {
-      // Open popup synchronously before any async operations to bypass browser popup blockers.
       const newTab = window.open('about:blank', '_blank');
       if (!newTab) {
         alert('Popup blocked by browser. Please allow popups for this site and try again.');
@@ -953,313 +644,210 @@ export default function UserManagement() {
         newTab.location.href = loginAsUrl;
       } else {
         newTab.close();
-        alert('Failed to obtain impersonation token: ' + JSON.stringify(data));
+        alert('Failed to obtain impersonation token');
       }
     } catch (err) {
-      if (newTab && !newTab.closed) newTab.close();
-      alert('Login As failed: ' + (err.response?.data?.message || err.message));
+      alert('Login As failed');
     }
   };
 
   const getRoleBadgeClass = (role) => {
     switch (role) {
-      case 'ADMIN':
-        return 'badge-primary bg-blue-100 text-blue-800';
-      case 'SUPER':
-        return 'badge-success bg-emerald-100 text-emerald-800';
-      case 'DISTRIBUTOR':
-        return 'bg-purple-100 text-purple-800 badge';
-      case 'RETAILER':
-        return 'badge bg-gray-100 text-gray-800';
-      default:
-        return 'badge bg-gray-100';
+      case 'ADMIN': return 'bg-blue-50 text-blue-600 border border-blue-100';
+      case 'SUPER': return 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+      case 'DISTRIBUTOR': return 'bg-purple-50 text-purple-600 border border-purple-100';
+      case 'RETAILER': return 'bg-gray-50 text-gray-600 border border-gray-100';
+      default: return 'bg-gray-50 text-gray-400';
     }
   };
 
+  if (view === 'create') {
+    return (
+      <div className="pb-20">
+        <CreateUserView onBack={() => setView('list')} onUserCreated={fetchUsers} />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-col gap-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="flex-col gap-6 pb-20">
+      <div className="flex justify-between items-center mb-8 animate-slide-up">
         <div>
-          <h1 className="text-2xl font-bold">User Management</h1>
-          <p className="text-muted text-sm mt-1">Manage your full downline hierarchy and who added each user.</p>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">USER MANAGEMENT</h1>
+          <p className="text-gray-400 font-bold mt-1 uppercase text-xs tracking-widest">Manage your full downline network</p>
         </div>
         {canManageUsers && (
-          <button onClick={() => setIsModalOpen(true)} className="btn btn-primary">
-            <Plus size={18} /> New User
+          <button onClick={() => setView('create')} className="btn-premium btn-premium-primary flex items-center justify-center gap-3 px-8 py-4 shadow-xl">
+            <Plus size={20} />
+            <span className="tracking-widest">ADD NEW USER</span>
           </button>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 p-4 bg-white rounded-2xl shadow-sm border border-gray-100 mb-6 animate-slide-up">
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-gray-400 ml-2" />
-            <select
-              value={filterRole}
-              onChange={(e) => {
-                setFilterRole(e.target.value);
-                setPage(1);
-              }}
-              className="form-input form-select py-2 h-10 min-w-[140px]"
-            >
-              <option value="">All Roles</option>
-              {filterRoles.map((role) => (
-                <option key={role} value={role}>
-                  {ROLE_LABELS[role] || role}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filterStatus}
-              onChange={(e) => {
-                setFilterStatus(e.target.value);
-                setPage(1);
-              }}
-              className="form-input form-select py-2 h-10 min-w-[140px]"
-            >
-              <option value="">All Statuses</option>
-              <option value="active">Active Only</option>
-              <option value="inactive">Inactive Only</option>
-            </select>
-          </div>
-          
-          <div className="flex-1 min-w-[300px]">
-            <UserSearch 
-              onSelect={(u) => {
-                setSearchQuery(u ? u.email : '');
-                setPage(1);
-              }}
-              onQueryChange={(q) => {
-                setSearchQuery(q);
-                // Debounced fetch is already handled by the user typing, 
-                // but we might want to trigger a search on page 1
-                setPage(1);
-              }}
-              placeholder="Search by name, email or mobile..."
-              className="w-full"
-            />
-          </div>
-
-          <button 
-            onClick={fetchUsers} 
-            disabled={loading}
-            className="btn-premium btn-premium-secondary h-10 px-4"
+      <div className="flex flex-wrap items-center gap-4 p-4 bg-white rounded-3xl shadow-sm border border-gray-100 mb-8 animate-slide-up">
+        <div className="flex items-center gap-2">
+          <Filter size={18} className="text-gray-400 ml-2" />
+          <select
+            value={filterRole}
+            onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
+            className="form-input form-select py-2 h-12 min-w-[160px] font-bold text-xs"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            <span className="hidden md:inline">Refresh</span>
-          </button>
+            <option value="">ALL ROLES</option>
+            {filterRoles.map((role) => (
+              <option key={role} value={role}>{ROLE_LABELS[role] || role}</option>
+            ))}
+          </select>
+          <select
+            value={filterStatus}
+            onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+            className="form-input form-select py-2 h-12 min-w-[160px] font-bold text-xs"
+          >
+            <option value="">ALL STATUS</option>
+            <option value="active">ACTIVE ONLY</option>
+            <option value="inactive">INACTIVE ONLY</option>
+          </select>
+        </div>
+        
+        <div className="flex-1 min-w-[300px]">
+          <UserSearch 
+            onSelect={(u) => { setSearchQuery(u ? u.email : ''); setPage(1); }}
+            onQueryChange={(q) => { setSearchQuery(q); setPage(1); }}
+            placeholder="Search by name, email or mobile..."
+            className="w-full"
+          />
         </div>
 
-      <div className="card">
-        <div className="data-table-container border-none shadow-none rounded-none">
-          <table className="data-table">
+        <button onClick={fetchUsers} disabled={loading} className="btn-premium btn-premium-secondary h-12 px-6">
+          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          <span className="hidden md:inline ml-2 tracking-widest text-[10px] font-black uppercase">Refresh</span>
+        </button>
+      </div>
+
+      <div className="glass-panel overflow-hidden border border-gray-100 shadow-sm rounded-3xl">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr>
-                <th className="sticky-col">ID</th>
-                <th>User Details</th>
-                <th>Role</th>
-                <th>Hierarchy</th>
-                <th>Balance</th>
-                <th>Status</th>
-                {/* <th>KYC</th> */}
-                <th>Joined</th>
-                <th className="sticky-col-right">Actions</th>
+              <tr className="bg-gray-50/50">
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">ID</th>
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">User Details</th>
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Role</th>
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Hierarchy</th>
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Wallet</th>
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
+                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr>
-                  <td colSpan="8" className="text-center py-8 text-gray-500">
-                    Loading...
-                  </td>
-                </tr>
+                <tr><td colSpan="7" className="p-20 text-center"><RefreshCw className="animate-spin text-primary mx-auto" size={32} /></td></tr>
               ) : users.length === 0 ? (
-                <tr>
-                  <td colSpan="8" className="text-center py-8 text-gray-500">
-                    No users found in your downline.
-                  </td>
-                </tr>
+                <tr><td colSpan="7" className="p-20 text-center text-gray-400 font-bold uppercase text-xs tracking-widest">No users found</td></tr>
               ) : (
-                users.map((managedUser) => (
-                  <tr key={managedUser.id} className={!managedUser.isActive ? 'opacity-60 bg-gray-50' : ''}>
-                    <td className="sticky-col">
-                      <span className="text-[10px] font-mono font-bold text-gray-400 bg-white px-1 rounded">
-                        #{managedUser.id.substring(0, 6)}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-semibold text-gray-900">{managedUser.profile?.ownerName || 'N/A'}</span>
-                        <span className="text-xs text-gray-500">{managedUser.profile?.shopName || 'No Shop Name'}</span>
-                        <span className="text-[10px] text-gray-400">{managedUser.email}</span>
-                        <span className="text-[11px] text-gray-500">
-                          <span className="font-medium text-gray-700">Added by:</span>{' '}
-                          {formatSummaryPrimary(managedUser.createdBy)}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${getRoleBadgeClass(managedUser.role)}`}>
-                        {ROLE_LABELS[managedUser.role] || managedUser.role}
-                      </span>
-                    </td>
-                    <td>
-                      <HierarchyStack user={managedUser} />
-                    </td>
-                    <td>
-                      <div className="flex flex-col">
-                        <div className="font-medium text-emerald-600">
-                          Rs {Number(managedUser.wallet?.balance || 0).toFixed(2)}
-                        </div>
-                        {Number(managedUser.wallet?.minimumHold || 0) > 0 && (
-                          <div className="text-[10px] font-bold text-orange-600 flex items-center gap-0.5" title="Minimum balance hold">
-                            <Banknote size={10} /> Hold: ₹{Number(managedUser.wallet.minimumHold).toFixed(0)}
+                users.map((managedUser, index) => {
+                  const serialId = `abv${String((page - 1) * 10 + index + 1).padStart(3, '0')}`;
+                  const isExpanding = activeAction?.userId === managedUser.id;
+
+                  return (
+                    <React.Fragment key={managedUser.id}>
+                      <tr className={`${!managedUser.isActive ? 'opacity-60 bg-gray-50/50' : 'hover:bg-gray-50/30'} transition-all group`}>
+                        <td className="p-6">
+                          <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-1 rounded-lg border border-primary/10">
+                            {serialId}
+                          </span>
+                        </td>
+                        <td className="p-6">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-black text-gray-900 tracking-tight text-sm uppercase">{managedUser.profile?.ownerName || 'N/A'}</span>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">{managedUser.email}</span>
+                            <span className="text-[10px] text-gray-500 font-black">{managedUser.profile?.mobileNumber || 'No Mobile'}</span>
                           </div>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${managedUser.isActive ? 'badge-success' : 'badge-danger'}`}>
-                        {managedUser.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    {/* <td>
-                       <span className={`badge ${managedUser.kycStatus === 'VERIFIED' ? 'badge-success' : managedUser.kycStatus === 'REJECTED' ? 'badge-danger' : 'badge-warning'}`}>
-                         {managedUser.kycStatus}
-                       </span>
-                     </td> */}
-                    <td>
-                      <span className="text-xs text-gray-500">
-                        {new Date(managedUser.createdAt).toLocaleDateString()}
-                      </span>
-                    </td>
-                    <td className="sticky-col-right">
-                      {canManageUsers ? (
-                        <div className="relative inline-block" data-menu-container>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuId(openMenuId === managedUser.id ? null : managedUser.id);
-                            }}
-                            className="p-2 hover:bg-gray-100 rounded-md border border-gray-200 inline-flex items-center justify-center"
-                            title="Actions"
+                        </td>
+                        <td className="p-6">
+                          <span className={`inline-flex px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${getRoleBadgeClass(managedUser.role)}`}>
+                            {ROLE_LABELS[managedUser.role] || managedUser.role}
+                          </span>
+                        </td>
+                        <td className="p-6">
+                          <HierarchyStack user={managedUser} />
+                        </td>
+                        <td className="p-6">
+                          <div className="flex flex-col">
+                            <div className="text-sm font-black text-emerald-600 tracking-tight">₹{Number(managedUser.wallet?.balance || 0).toFixed(2)}</div>
+                            {Number(managedUser.wallet?.minimumHold || 0) > 0 && (
+                              <div className="text-[9px] font-black text-orange-600 flex items-center gap-0.5 mt-0.5">
+                                <Banknote size={10} /> HOLD: ₹{Number(managedUser.wallet.minimumHold).toFixed(0)}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-6 text-center">
+                          <button 
+                            onClick={() => toggleStatus(managedUser.id)}
+                            className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 ${
+                              managedUser.isActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
+                            }`}
                           >
-                            <MoreVertical size={16} className="text-gray-600" />
+                            {managedUser.isActive ? 'Active' : 'Inactive'}
                           </button>
-
-                          {openMenuId === managedUser.id && (
-                            <div
-                              className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in"
-                              style={{ minWidth: '160px' }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <button
-                                onClick={() => {
-                                  setSelectedUser(managedUser);
-                                  setIsEditModalOpen(true);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full text-left px-4 py-3 hover:bg-blue-50 text-blue-600 flex items-center gap-3 border-b border-gray-50 text-sm font-medium whitespace-nowrap transition-colors"
-                              >
-                                <Edit2 size={16} /> Edit User
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setSelectedUser(managedUser);
-                                  setIsChargesModalOpen(true);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full text-left px-4 py-3 hover:bg-emerald-50 text-emerald-600 flex items-center gap-3 border-b border-gray-50 text-sm font-medium whitespace-nowrap transition-colors"
-                              >
-                                <Settings size={16} /> Edit Charges
-                              </button>
-
-                              {canSetHold && (
-                                <button
-                                  onClick={() => {
-                                    setSelectedUser(managedUser);
-                                    setIsHoldModalOpen(true);
-                                    setOpenMenuId(null);
-                                  }}
-                                  className="w-full text-left px-4 py-3 hover:bg-orange-50 text-orange-600 flex items-center gap-3 border-b border-gray-50 text-sm font-medium whitespace-nowrap transition-colors"
-                                >
-                                  <Banknote size={16} /> Wallet Hold
-                                </button>
-                              )}
-
-                              {canImpersonate && (
-                                <button
-                                  onClick={() => {
-                                    loginAsUser(managedUser.id, managedUser.email);
-                                    setOpenMenuId(null);
-                                  }}
-                                  className="w-full text-left px-4 py-3 hover:bg-indigo-50 text-indigo-600 flex items-center gap-3 border-b border-gray-50 text-sm font-medium whitespace-nowrap transition-colors"
-                                >
-                                  <LogIn size={16} /> Login As
-                                </button>
-                              )}
-
-                              <button
-                                onClick={() => {
-                                  toggleStatus(managedUser.id, managedUser.isActive);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full text-left px-4 py-3 flex items-center gap-3 text-sm font-medium whitespace-nowrap transition-colors hover:bg-emerald-50 text-emerald-600"
-                              >
-                                {managedUser.isActive ? <X size={16} /> : <CheckCircle2 size={16} />}
-                                {managedUser.isActive ? 'Disable' : 'Enable'}
-                              </button>
+                        </td>
+                        <td className="p-6">
+                          <div className="flex items-center justify-end gap-2">
+                             <button 
+                                onClick={() => setActiveAction(isExpanding && activeAction.type === 'edit' ? null : { userId: managedUser.id, type: 'edit' })}
+                                className={`p-2 rounded-xl border transition-all ${isExpanding && activeAction.type === 'edit' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white text-gray-400 hover:text-blue-600 hover:border-blue-100'}`}
+                                title="Edit User"
+                             >
+                                <Edit2 size={16} />
+                             </button>
+                             <button 
+                                onClick={() => setActiveAction(isExpanding && activeAction.type === 'charges' ? null : { userId: managedUser.id, type: 'charges' })}
+                                className={`p-2 rounded-xl border transition-all ${isExpanding && activeAction.type === 'charges' ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg' : 'bg-white text-gray-400 hover:text-emerald-600 hover:border-emerald-100'}`}
+                                title="Edit Charges"
+                             >
+                                <Settings size={16} />
+                             </button>
+                             <button 
+                                onClick={() => setActiveAction(isExpanding && activeAction.type === 'hold' ? null : { userId: managedUser.id, type: 'hold' })}
+                                className={`p-2 rounded-xl border transition-all ${isExpanding && activeAction.type === 'hold' ? 'bg-orange-600 text-white border-orange-600 shadow-lg' : 'bg-white text-gray-400 hover:text-orange-600 hover:border-orange-100'}`}
+                                title="Wallet Hold"
+                             >
+                                <Banknote size={16} />
+                             </button>
+                             {canImpersonate && (
+                               <button onClick={() => loginAsUser(managedUser.id)} className="p-2 bg-white text-gray-400 hover:text-indigo-600 hover:border-indigo-100 rounded-xl border transition-all" title="Login As">
+                                 <LogIn size={16} />
+                               </button>
+                             )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanding && (
+                        <tr>
+                          <td colSpan="7" className="p-4 bg-gray-50/50">
+                            <div className="animate-slide-down">
+                               {activeAction.type === 'edit' && <EditUserForm user={managedUser} onCancel={() => setActiveAction(null)} onUpdated={fetchUsers} />}
+                               {activeAction.type === 'charges' && <UserChargesForm targetUser={managedUser} onCancel={() => setActiveAction(null)} />}
+                               {activeAction.type === 'hold' && <WalletHoldForm user={managedUser} onCancel={() => setActiveAction(null)} onUpdated={fetchUsers} />}
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">View only</span>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                ))
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        <div className="p-4 border-t border-gray-100 flex justify-between items-center text-sm text-gray-500">
-          <span>
-            Showing page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="px-3 py-1 border rounded disabled:opacity-50">
-              Prev
-            </button>
-            <button
-              disabled={page === totalPages}
-              onClick={() => setPage((value) => value + 1)}
-              className="px-3 py-1 border rounded disabled:opacity-50"
-            >
-              Next
-            </button>
+        <div className="p-6 border-t border-gray-50 flex justify-between items-center text-[10px] font-black uppercase text-gray-400 tracking-widest">
+          <span>Page {page} of {totalPages}</span>
+          <div className="flex gap-4">
+            <button disabled={page === 1} onClick={() => setPage(v => v - 1)} className="px-6 py-2 border border-gray-100 rounded-xl disabled:opacity-30 hover:bg-gray-50 transition-all">PREV</button>
+            <button disabled={page === totalPages} onClick={() => setPage(v => v + 1)} className="px-6 py-2 border border-gray-100 rounded-xl disabled:opacity-30 hover:bg-gray-50 transition-all">NEXT</button>
           </div>
         </div>
       </div>
-
-      <CreateUserModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onUserCreated={fetchUsers} />
-      <EditUserModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        user={selectedUser}
-        onUserUpdated={fetchUsers}
-      />
-      <UserChargesModal
-        isOpen={isChargesModalOpen}
-        onClose={() => setIsChargesModalOpen(false)}
-        targetUser={selectedUser}
-      />
-      <WalletHoldModal
-        isOpen={isHoldModalOpen}
-        onClose={() => setIsHoldModalOpen(false)}
-        user={selectedUser}
-        onUpdated={fetchUsers}
-      />
     </div>
   );
 }

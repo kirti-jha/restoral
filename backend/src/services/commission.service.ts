@@ -166,7 +166,7 @@ function resolveChargeWithinAncestorScope(
     return 0;
   }
 
-  return computeCharge(row, amount);
+  return computeCharge(resolvedRow, amount);
 }
 
 export function getAssignableRateRoles(actorRole: string) {
