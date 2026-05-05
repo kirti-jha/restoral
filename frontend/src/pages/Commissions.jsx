@@ -87,41 +87,80 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-6 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6 animate-slide-down">
-      <div className="flex justify-between items-center">
-        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{initialData ? 'Update' : 'Add New'} Slab</h4>
-        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+    <form onSubmit={handleSubmit} className="p-8 bg-white rounded-3xl border border-gray-100 shadow-xl space-y-8 animate-slide-down">
+      <div className="flex justify-between items-center border-b border-gray-50 pb-4">
+        <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">{initialData ? 'Update' : 'Initialize New'} Commission Slab</h4>
+        <button type="button" onClick={onCancel} className="p-2 hover:bg-gray-50 rounded-full text-gray-400 transition-colors"><X size={20} /></button>
       </div>
       
-      {error && <div className="p-3 bg-red-50 text-red-600 text-[10px] font-bold uppercase rounded-lg">{error}</div>}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-[10px] font-black uppercase rounded-xl flex items-center gap-3">
+          <ShieldAlert size={14} /> {error}
+        </div>
+      )}
       
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-        <div className="form-group">
-          <label className="form-label text-[9px] mb-1">MIN AMOUNT (₹)</label>
-          <input type="text" value={formData.minAmount} onChange={e => setFormData({...formData, minAmount: e.target.value})} className="form-input h-11 font-bold text-xs" placeholder="0.00" required />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="form-group mb-0">
+          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Minimum Amount (₹)</label>
+          <input 
+            type="text" value={formData.minAmount} 
+            onChange={e => setFormData({...formData, minAmount: e.target.value})} 
+            className="form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all" 
+            placeholder="0.00" required 
+          />
         </div>
-        <div className="form-group">
-          <label className="form-label text-[9px] mb-1">MAX AMOUNT (₹)</label>
-          <input type="text" value={formData.maxAmount} onChange={e => setFormData({...formData, maxAmount: e.target.value})} className="form-input h-11 font-bold text-xs" placeholder="Leave empty for Max" />
+        <div className="form-group mb-0">
+          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Maximum Amount (₹)</label>
+          <input 
+            type="text" value={formData.maxAmount} 
+            onChange={e => setFormData({...formData, maxAmount: e.target.value})} 
+            className="form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all" 
+            placeholder="Leave empty for unlimited" 
+          />
         </div>
-        <div className="form-group">
-          <label className="form-label text-[9px] mb-1">CHARGE VALUE</label>
-          <div className="flex gap-2">
-            <input type="text" value={formData.commissionValue} onChange={e => setFormData({...formData, commissionValue: e.target.value})} className="form-input h-11 font-bold text-xs flex-1" placeholder="0.00" required />
-            <select value={formData.commissionType} onChange={e => setFormData({...formData, commissionType: e.target.value})} className="form-input h-11 text-[9px] font-black w-24">
-              {COMMISSION_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="form-group mb-0">
+          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Charge Mechanism</label>
+          <select 
+            value={formData.commissionType} 
+            onChange={e => setFormData({...formData, commissionType: e.target.value})} 
+            className="form-input h-14 text-xs font-black uppercase bg-gray-50/50 border-gray-200"
+          >
+            {COMMISSION_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
-        <div className="flex gap-2">
-          <select value={formData.isActive ? 'true' : 'false'} onChange={e => setFormData({...formData, isActive: e.target.value === 'true'})} className="form-input h-11 text-[9px] font-black w-24">
+        <div className="form-group mb-0">
+          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Charge Value</label>
+          <input 
+            type="text" value={formData.commissionValue} 
+            onChange={e => setFormData({...formData, commissionValue: e.target.value})} 
+            className="form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all" 
+            placeholder="0.00" required 
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+        <div className="flex items-center gap-4">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Slab Status:</label>
+          <select 
+            value={formData.isActive ? 'true' : 'false'} 
+            onChange={e => setFormData({...formData, isActive: e.target.value === 'true'})} 
+            className="form-input h-12 text-[10px] font-black uppercase w-32 bg-white"
+          >
             <option value="true">ACTIVE</option>
             <option value="false">PAUSED</option>
           </select>
-          <button type="submit" disabled={saving} className="btn-premium btn-premium-primary h-11 flex-1 text-[10px] font-black tracking-widest uppercase">
-            {saving ? '...' : 'SAVE SLAB'}
-          </button>
         </div>
+        <button 
+          type="submit" 
+          disabled={saving} 
+          className="btn-premium btn-premium-primary h-14 w-full text-xs font-black tracking-[0.2em] uppercase shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+        >
+          {saving ? <RefreshCw className="animate-spin" size={18} /> : 'COMMIT CHANGES'}
+        </button>
       </div>
     </form>
   );
