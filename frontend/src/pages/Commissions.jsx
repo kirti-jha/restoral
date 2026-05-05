@@ -193,14 +193,16 @@ export default function Commissions() {
   const [inheritedSlabs, setInheritedSlabs] = useState([]);
   const [overrides, setOverrides] = useState([]);
   const [effective, setEffective] = useState([]);
+  const [managedUsers, setManagedUsers] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSlab, setEditingSlab] = useState(null);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const endpoints = canManageRates 
-        ? ['/commissions/slabs', '/commissions/overrides', '/commissions/effective']
+        ? ['/commissions/slabs', '/commissions/overrides', '/commissions/effective', '/users?limit=100']
         : ['/commissions/effective'];
         
       const results = await Promise.all(endpoints.map(e => api.get(e)));
@@ -210,6 +212,7 @@ export default function Commissions() {
         setInheritedSlabs(results[0].data.inheritedSlabs || []);
         setOverrides(results[1].data.overrides || []);
         setEffective(results[2].data.slabs || []);
+        setManagedUsers(results[3].data.users || []);
       } else {
         setEffective(results[0].data.slabs || []);
       }
@@ -443,68 +446,105 @@ export default function Commissions() {
         />
       </div>
 
-      {!targetUser && overrides.length > 0 && (
-        <div className="space-y-4 animate-slide-up mt-8">
-          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">All Active Overrides</label>
-          <div className="glass-panel overflow-hidden border border-gray-100 shadow-sm rounded-3xl bg-white">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50/50">
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Target User</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Service</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Range (Min - Max)</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Charge</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {overrides.map(o => (
-                  <React.Fragment key={o.id}>
-                    <tr className="hover:bg-gray-50/30 transition-all">
-                      <td className="p-4">
-                        <div 
-                          className="flex flex-col cursor-pointer group" 
-                          onClick={() => handleTargetUserSelect(o.targetUser)}
-                        >
-                          <span className="font-black text-gray-900 text-[11px] group-hover:text-primary transition-colors uppercase">
-                            {o.targetUser?.profile?.ownerName || o.targetUser?.email}
-                          </span>
-                          <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{o.targetUser?.role}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 font-black text-gray-900 text-[10px] uppercase">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-black text-gray-900">{o.serviceType}</span>
-                          {o.setBy && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-[8px] text-gray-400 font-black tracking-tighter uppercase">Last Set By:</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${o.setBy.role === 'ADMIN' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
-                                {o.setBy?.profile?.ownerName || o.setBy?.role}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4 text-xs font-bold text-gray-600">{formatRange(o.minAmount, o.maxAmount)}</td>
-                      <td className="p-4 text-right font-black text-emerald-600 text-sm">{formatCharge(o.commissionType, o.commissionValue)}</td>
-                      <td className="p-4 text-center">
-                        <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${o.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{o.isActive ? 'Active' : 'Paused'}</span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button onClick={() => setEditingSlab(editingSlab?.id === o.id ? null : o)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={14} /></button>
-                          {isAdmin && <button onClick={() => handleDelete(o.id, true)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>}
-                        </div>
-                      </td>
+      {!targetUser && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+          {/* Active Overrides Section */}
+          <div className="space-y-4 animate-slide-up">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Active Overrides</label>
+            {overrides.length > 0 ? (
+              <div className="glass-panel overflow-hidden border border-gray-100 shadow-sm rounded-3xl bg-white">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50/50">
+                      <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">User</th>
+                      <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                     </tr>
-                    {editingSlab?.id === o.id && (
-                      <tr><td colSpan="6" className="p-4 bg-gray-50/30"><ChargeForm isAdmin={isAdmin} initialData={o} context={{ targetUserId: o.targetUserId, serviceType: o.serviceType }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {Array.from(new Map(overrides.map(o => [o.targetUserId, o.targetUser])).values()).map(u => (
+                      <tr key={u.id} className="hover:bg-gray-50/30 transition-all">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[10px] font-black">
+                              {(u?.profile?.ownerName || u?.email || 'U').charAt(0)}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-black text-gray-900 text-[11px] uppercase">{u?.profile?.ownerName || u?.email}</span>
+                              <span className="text-[8px] text-gray-500 font-bold uppercase">{u?.role}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button 
+                            onClick={() => handleTargetUserSelect(u)}
+                            className="text-[9px] font-black text-primary hover:underline uppercase"
+                          >
+                            Manage Overrides
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-10 text-center bg-gray-50/50 rounded-3xl border border-dashed border-gray-200">
+                <ShieldAlert className="mx-auto text-gray-300 mb-2" size={24} />
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">No active overrides</p>
+              </div>
+            )}
+          </div>
+
+          {/* All Managed Users Section */}
+          <div className="space-y-4 animate-slide-up">
+            <div className="flex justify-between items-center px-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Managed Users (Downline)</label>
+              <span className="text-[9px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{managedUsers.length} TOTAL</span>
+            </div>
+            <div className="glass-panel overflow-hidden border border-gray-100 shadow-sm rounded-3xl bg-white max-h-[500px] overflow-y-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50/50 sticky top-0 z-10">
+                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50">User Details</th>
+                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right bg-gray-50">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {managedUsers.length === 0 ? (
+                    <tr><td colSpan="2" className="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">No managed users found</td></tr>
+                  ) : (
+                    managedUsers.map(u => (
+                      <tr key={u.id} className="hover:bg-gray-50/30 transition-all group">
+                        <td className="p-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-primary/10 group-hover:text-primary transition-all font-black uppercase">
+                              {(u.profile?.ownerName || u.email).charAt(0)}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-black text-gray-900 text-[11px] uppercase group-hover:text-primary transition-colors">{u.profile?.ownerName || 'No Name'}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] text-gray-500 font-bold uppercase">{u.role}</span>
+                                <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
+                                <span className="text-[9px] text-gray-400 font-medium">{u.email}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button 
+                            onClick={() => handleTargetUserSelect(u)}
+                            className="p-2.5 bg-gray-50 text-gray-400 hover:bg-primary hover:text-white rounded-xl transition-all shadow-sm"
+                            title="Set Overrides"
+                          >
+                            <ArrowRightLeft size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

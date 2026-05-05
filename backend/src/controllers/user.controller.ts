@@ -254,7 +254,7 @@ export const searchUsers = async (req: AuthRequest, res: Response) => {
     const visibleUserIds = getDescendantIds(req.user!.id, hierarchyUsers);
 
     if (visibleUserIds.length === 0) {
-      res.json({ success: true, users: ["REPLACED"] });
+      res.json({ success: true, users: [] });
       return;
     }
 
