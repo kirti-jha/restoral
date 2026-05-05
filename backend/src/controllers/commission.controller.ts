@@ -44,26 +44,24 @@ function dedupeCommissionSlabs<T extends { id: string; serviceType: string; appl
   });
 }
 
-function dedupeUserOverrides<T extends { id: string; serviceType: string; commissionType: string; commissionValue: Prisma.Decimal | string | number; minAmount: Prisma.Decimal | string | number; maxAmount: Prisma.Decimal | string | number | null }>(
+function dedupeUserOverrides<T extends { id: string; targetUserId: string; serviceType: string; commissionType: string; commissionValue: Prisma.Decimal | string | number; minAmount: Prisma.Decimal | string | number; maxAmount: Prisma.Decimal | string | number | null }>(
   rows: T[]
 ) {
-  const seen = new Set<string>();
+  // Use a Map to keep the LAST seen record for each unique (target, service, range)
+  // Since the input rows are ordered by createdAt ASC, the last one will be the newest.
+  const map = new Map<string, T>();
 
-  return rows.filter((row) => {
+  for (const row of rows) {
     const key = [
+      row.targetUserId,
       row.serviceType,
-      row.commissionType,
-      toDecimalAmount(row.commissionValue).toFixed(2),
       getRangeKey(row.minAmount, row.maxAmount),
     ].join('|');
 
-    if (seen.has(key)) {
-      return false;
-    }
+    map.set(key, row);
+  }
 
-    seen.add(key);
-    return true;
-  });
+  return Array.from(map.values());
 }
 
 function sendBadRequest(res: Response, message: string) {
@@ -192,6 +190,8 @@ export const getSlabs = async (req: AuthRequest, res: Response) => {
     let inheritedSlabs: any[] = [];
     if (actorRole !== 'ADMIN') {
       const allowedRoles = getAssignableRateRoles(actorRole);
+      // Include actor's own role to see inherited base rates
+      const rolesToFetch = [...new Set([...allowedRoles, actorRole])];
       
       if (actor?.parentId) {
         inheritedSlabs = await prisma.commissionSlab.findMany({
@@ -199,7 +199,7 @@ export const getSlabs = async (req: AuthRequest, res: Response) => {
             setById: actor.parentId,
             serviceType: { in: ['PAYOUT', 'FUND_REQUEST'] },
             isActive: true,
-            applyOnRole: { in: allowedRoles },
+            applyOnRole: { in: rolesToFetch as Role[] },
           },
           include: {
             setBy: {
@@ -386,7 +386,15 @@ export const getUserOverrides = async (req: AuthRequest, res: Response) => {
     const actorRole = req.user!.role;
 
     const hierarchyUsers = await fetchHierarchyUsers();
-    const targetIds = getDescendantIds(actorId, hierarchyUsers);
+    let targetIds: string[];
+
+    if (actorRole === 'ADMIN') {
+      // Admins can see overrides for all users in the system
+      targetIds = hierarchyUsers.map(u => u.id);
+    } else {
+      // Other managers only see overrides for their descendants
+      targetIds = getDescendantIds(actorId, hierarchyUsers);
+    }
 
     // Fetch overrides for anyone in hierarchy, regardless of who set it
     const overrides = await prisma.userCommissionSetup.findMany({
@@ -412,7 +420,7 @@ export const getUserOverrides = async (req: AuthRequest, res: Response) => {
           },
         },
       },
-      orderBy: [{ targetUserId: 'asc' }, { serviceType: 'asc' }, { minAmount: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ targetUserId: 'asc' }, { serviceType: 'asc' }, { minAmount: 'asc' }, { createdAt: 'desc' }],
     });
 
     res.json({ success: true, overrides: dedupeUserOverrides(overrides) });
@@ -571,7 +579,13 @@ export const deleteUserOverride = async (req: AuthRequest, res: Response) => {
 export const getOverrideTargets = async (req: AuthRequest, res: Response) => {
   try {
     const hierarchyUsers = await fetchHierarchyUsers();
-    const targetIds = getDescendantIds(req.user!.id, hierarchyUsers);
+    let targetIds: string[];
+
+    if (req.user!.role === 'ADMIN') {
+      targetIds = hierarchyUsers.map(u => u.id);
+    } else {
+      targetIds = getDescendantIds(req.user!.id, hierarchyUsers);
+    }
 
     const targets = await prisma.user.findMany({
       where: {

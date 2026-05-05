@@ -2,7 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../../lib/api';
 import { Search, User, X, RefreshCw } from 'lucide-react';
 
-const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by name, email or mobile...', className = '' }) => {
+const UserSearch = ({
+  onSelect,
+  onQueryChange,
+  placeholder = 'Search user by name, email or mobile...',
+  className = '',
+  showResultsInline = false,
+  loadOnMount = false,
+}) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -20,12 +27,18 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (loadOnMount) {
+      searchUsers('');
+    }
+  }, [loadOnMount]);
+
   const searchUsers = async (q = '') => {
     setLoading(true);
     try {
       const { data } = await api.get(`/users/search?q=${encodeURIComponent(q)}`);
       if (data.success) {
-        setResults(data.users);
+        setResults(Array.isArray(data.users) ? data.users.filter((user) => user && typeof user === 'object') : []);
         setIsOpen(true);
       }
     } catch (err) {
@@ -52,11 +65,21 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
   };
 
   const handleSelect = (user) => {
-    setQuery(user?.ownerName || user?.email || '');
-    setIsOpen(false);
-    setResults([]);
+    setQuery(user?.ownerName || user?.shopName || user?.email || '');
+    if (!showResultsInline) {
+      setIsOpen(false);
+      setResults([]);
+    }
     onSelect(user);
   };
+
+  const resultsPanelClasses = showResultsInline
+    ? 'mt-3 w-full bg-white rounded-xl shadow-sm border border-gray-100 z-[100] max-h-80 overflow-y-auto animate-slide-up'
+    : 'absolute mt-2 w-full bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] max-h-80 overflow-y-auto animate-slide-up';
+
+  const emptyPanelClasses = showResultsInline
+    ? 'mt-3 w-full bg-white rounded-xl shadow-sm border border-gray-100 z-[100] p-10 text-center animate-slide-up'
+    : 'absolute mt-2 w-full bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] p-10 text-center animate-slide-up';
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
@@ -87,8 +110,12 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
                 type="button"
                 onClick={() => { 
                   setQuery(''); 
-                  setResults([]); 
-                  setIsOpen(false); 
+                  if (showResultsInline && loadOnMount) {
+                    searchUsers('');
+                  } else {
+                    setResults([]);
+                    setIsOpen(false);
+                  }
                   if (onSelect) onSelect(null);
                 }} 
                 className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
@@ -101,7 +128,7 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
       </div>
 
       {isOpen && results.length > 0 && (
-        <div className="absolute mt-2 w-full bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] max-h-80 overflow-y-auto animate-slide-up">
+        <div className={resultsPanelClasses}>
           <div className="p-3 border-b border-gray-50 bg-gray-50/50">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Suggested Users</span>
           </div>
@@ -133,7 +160,7 @@ const UserSearch = ({ onSelect, onQueryChange, placeholder = 'Search user by nam
       )}
 
       {isOpen && query.trim() && !loading && results.length === 0 && (
-        <div className="absolute mt-2 w-full bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] p-10 text-center animate-slide-up">
+        <div className={emptyPanelClasses}>
           <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <Search size={32} className="text-gray-300" strokeWidth={1.5} />
           </div>

@@ -297,12 +297,11 @@ function selectResolvedRate(
     // We check them in order from nearest to end-user (Retailer) to most general.
     const targets = ancestorIndex > 0 ? chain.slice(0, ancestorIndex) : [user];
 
-    // 1. Check for overrides from this ancestor for anyone in the sub-chain
+    // 1. Check for overrides for anyone in the sub-chain
     for (const target of targets) {
       const targetId = String(target.id);
       const override = overrides.find(
         (row) =>
-          String(row.setById) === ancestorId &&
           String(row.targetUserId) === targetId &&
           row.serviceType === serviceType &&
           matchesAmount(row, amountPaise)

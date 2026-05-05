@@ -69,14 +69,16 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context, isAdmin }) => {
     setSaving(true);
     setError('');
     try {
+      const isNew = !initialData?.id || initialData.id.toString().startsWith('new-') || initialData.id.toString().startsWith('ovr-');
+      
       const payload = {
         ...formData,
-        id: initialData?.id,
+        id: isNew ? undefined : initialData.id,
         maxAmount: formData.maxAmount === '' ? null : formData.maxAmount,
       };
       
       const endpoint = context.targetUserId ? '/commissions/overrides' : '/commissions/slabs';
-      const method = initialData?.id ? 'put' : 'post';
+      const method = isNew ? 'post' : 'put';
       
       await api[method](endpoint, payload);
       onSaved();
@@ -86,7 +88,8 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context, isAdmin }) => {
     setSaving(false);
   };
 
-  const isReadOnly = !isAdmin;
+  const isOverride = !!context.targetUserId;
+  const isSlabReadOnly = !isAdmin;
 
   return (
     <form onSubmit={handleSubmit} className="p-8 bg-white rounded-3xl border border-gray-100 shadow-xl space-y-8 animate-slide-down">
@@ -106,20 +109,20 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context, isAdmin }) => {
           <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Minimum Amount (₹)</label>
           <input 
             type="text" value={formData.minAmount} 
-            onChange={e => !isReadOnly && setFormData({...formData, minAmount: e.target.value})} 
-            className={`form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all ${isReadOnly ? 'cursor-not-allowed opacity-70' : ''}`} 
+            onChange={e => !isSlabReadOnly && setFormData({...formData, minAmount: e.target.value})} 
+            className={`form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all ${isSlabReadOnly ? 'cursor-not-allowed opacity-70' : ''}`} 
             placeholder="0.00" required 
-            readOnly={isReadOnly}
+            readOnly={isSlabReadOnly}
           />
         </div>
         <div className="form-group mb-0">
           <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Maximum Amount (₹)</label>
           <input 
             type="text" value={formData.maxAmount} 
-            onChange={e => !isReadOnly && setFormData({...formData, maxAmount: e.target.value})} 
-            className={`form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all ${isReadOnly ? 'cursor-not-allowed opacity-70' : ''}`} 
+            onChange={e => !isSlabReadOnly && setFormData({...formData, maxAmount: e.target.value})} 
+            className={`form-input h-14 font-bold text-sm bg-gray-50/50 border-gray-200 focus:bg-white transition-all ${isSlabReadOnly ? 'cursor-not-allowed opacity-70' : ''}`} 
             placeholder="Leave empty for unlimited" 
-            readOnly={isReadOnly}
+            readOnly={isSlabReadOnly}
           />
         </div>
       </div>
@@ -129,9 +132,9 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context, isAdmin }) => {
           <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">Charge Mechanism</label>
           <select 
             value={formData.commissionType} 
-            onChange={e => !isReadOnly && setFormData({...formData, commissionType: e.target.value})} 
-            className={`form-input h-14 text-xs font-black uppercase bg-gray-50/50 border-gray-200 ${isReadOnly ? 'cursor-not-allowed opacity-70' : ''}`}
-            disabled={isReadOnly}
+            onChange={e => !isSlabReadOnly && setFormData({...formData, commissionType: e.target.value})} 
+            className={`form-input h-14 text-xs font-black uppercase bg-gray-50/50 border-gray-200 ${isSlabReadOnly ? 'cursor-not-allowed opacity-70' : ''}`}
+            disabled={isSlabReadOnly}
           >
             {COMMISSION_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -152,8 +155,9 @@ const ChargeForm = ({ initialData, onCancel, onSaved, context, isAdmin }) => {
           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Slab Status:</label>
           <select 
             value={formData.isActive ? 'true' : 'false'} 
-            onChange={e => setFormData({...formData, isActive: e.target.value === 'true'})} 
-            className="form-input h-12 text-[10px] font-black uppercase w-32 bg-white"
+            onChange={e => !isSlabReadOnly && setFormData({...formData, isActive: e.target.value === 'true'})} 
+            className={`form-input h-12 text-[10px] font-black uppercase w-32 bg-white ${isSlabReadOnly ? 'cursor-not-allowed opacity-70' : ''}`}
+            disabled={isSlabReadOnly}
           >
             <option value="true">ACTIVE</option>
             <option value="false">PAUSED</option>
@@ -217,6 +221,23 @@ export default function Commissions() {
 
   useEffect(() => { fetchData(); }, [canManageRates]);
 
+  const handleTargetUserSelect = async (selectedUser) => {
+    setEditingSlab(null);
+    setIsFormOpen(false);
+
+    if (!selectedUser?.id) {
+      setTargetUser(null);
+      return;
+    }
+
+    try {
+      const { data } = await api.get(`/users/${selectedUser.id}`);
+      setTargetUser(data.user || selectedUser);
+    } catch (err) {
+      setTargetUser(selectedUser);
+    }
+  };
+
   const handleDelete = async (id, isOverride = false) => {
     if (!isAdmin) return;
     if (!window.confirm('Delete this slab permanently?')) return;
@@ -233,10 +254,20 @@ export default function Commissions() {
   const filteredOverrides = overrides.filter(o => o.targetUserId === targetUser?.id);
 
   const findInheritedForRange = (min, max) => {
-    return currentInherited.find(s => 
+    // Try exact match first
+    const exact = currentInherited.find(s => 
       Number(s.minAmount).toFixed(2) === Number(min).toFixed(2) && 
       (s.maxAmount === null ? max === null : Number(s.maxAmount).toFixed(2) === Number(max).toFixed(2))
     );
+    if (exact) return exact;
+
+    // Fallback: Find any parent slab that covers the start of this range
+    const startNum = Number(min);
+    return currentInherited.find(s => {
+      const sMin = Number(s.minAmount);
+      const sMax = s.maxAmount === null ? Infinity : Number(s.maxAmount);
+      return startNum >= sMin && startNum <= sMax;
+    });
   };
 
   const renderDefaultSelector = () => (
@@ -278,7 +309,7 @@ export default function Commissions() {
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Active Slabs for {selService} - {ROLE_LABELS[selRole]}</h3>
-              {!isAdmin && <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 flex items-center gap-1"><ShieldAlert size={10} /> Inheritance and Deletion policy active</p>}
+              {!isAdmin && <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 flex items-center gap-1"><ShieldAlert size={10} /> Enforced by Admin Slab Structure</p>}
             </div>
             {isAdmin && (
               <button onClick={() => { setEditingSlab(null); setIsFormOpen(!isFormOpen); }} className="btn-premium btn-premium-secondary px-6 py-2.5 text-[10px]">
@@ -288,7 +319,7 @@ export default function Commissions() {
             )}
           </div>
 
-          {isFormOpen && !editingSlab && (
+          {isFormOpen && isAdmin && !editingSlab && (
             <ChargeForm 
               isAdmin={isAdmin}
               context={{ serviceType: selService, applyOnRole: selRole }}
@@ -303,46 +334,80 @@ export default function Commissions() {
                 <tr className="bg-gray-50/50">
                   <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Range (Min - Max)</th>
                   {!isAdmin && <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Inherited Charge</th>}
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">{isAdmin ? 'Default Charge' : 'New Charge'}</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">{isAdmin ? 'Default Charge' : 'Your Charge'}</th>
                   <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
                   <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredSlabs.length === 0 ? (
-                  <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">No slabs configured</td></tr>
+                {(isAdmin ? filteredSlabs : currentInherited).length === 0 ? (
+                  <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">No slabs configured by Admin</td></tr>
                 ) : (
-                  filteredSlabs.map(s => {
-                    const inherited = findInheritedForRange(s.minAmount, s.maxAmount);
+                  (isAdmin ? filteredSlabs : currentInherited).map(template => {
+                    const mySlab = isAdmin ? template : filteredSlabs.find(s => 
+                      Number(s.minAmount).toFixed(2) === Number(template.minAmount).toFixed(2) &&
+                      (s.maxAmount === null ? template.maxAmount === null : Number(s.maxAmount).toFixed(2) === Number(template.maxAmount).toFixed(2))
+                    );
+
+                    const slabId = mySlab?.id || `new-${template.id}`;
+
                     return (
-                      <React.Fragment key={s.id}>
+                      <React.Fragment key={template.id}>
                         <tr className="hover:bg-gray-50/30 transition-all">
-                          <td className="p-4 text-xs font-bold text-gray-600">{formatRange(s.minAmount, s.maxAmount)}</td>
+                          <td className="p-4 text-xs font-bold text-gray-600">{formatRange(template.minAmount, template.maxAmount)}</td>
                           {!isAdmin && (
                             <td className="p-4 text-right">
-                              {inherited ? (
-                                <div className="flex flex-col items-end">
-                                  <span className="font-black text-gray-400 text-xs">{formatCharge(inherited.commissionType, inherited.commissionValue)}</span>
-                                  <span className="text-[8px] font-black text-gray-300 uppercase tracking-tighter">By {inherited.setBy?.role}</span>
-                                </div>
-                              ) : (
-                                <span className="text-[10px] font-black text-gray-300 uppercase">N/A</span>
-                              )}
+                              <div className="flex flex-col items-end">
+                                <span className="font-black text-gray-400 text-xs">{formatCharge(template.commissionType, template.commissionValue)}</span>
+                                <span className="text-[8px] font-black text-gray-300 uppercase tracking-tighter">By {template.setBy?.role}</span>
+                              </div>
                             </td>
                           )}
-                          <td className="p-4 text-right font-black text-emerald-600 text-sm">{formatCharge(s.commissionType, s.commissionValue)}</td>
+                          <td className="p-4 text-right font-black text-emerald-600 text-sm">
+                            {mySlab ? formatCharge(mySlab.commissionType, mySlab.commissionValue) : <span className="text-gray-300 text-[10px] uppercase">Not Set</span>}
+                          </td>
                           <td className="p-4 text-center">
-                            <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${s.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{s.isActive ? 'Active' : 'Paused'}</span>
+                            {mySlab ? (
+                              <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${mySlab.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{mySlab.isActive ? 'Active' : 'Paused'}</span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-full text-[8px] font-black uppercase bg-gray-50 text-gray-300">Inactive</span>
+                            )}
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex justify-end gap-2">
-                              <button onClick={() => setEditingSlab(editingSlab?.id === s.id ? null : s)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={14} /></button>
-                              {isAdmin && <button onClick={() => handleDelete(s.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>}
+                              {mySlab ? (
+                                <>
+                                  <button onClick={() => setEditingSlab(editingSlab?.id === mySlab.id ? null : mySlab)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                    <Edit2 size={14} />
+                                  </button>
+                                  {isAdmin && (
+                                    <button onClick={() => handleDelete(mySlab.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                !isAdmin && (
+                                  <button 
+                                    onClick={() => setEditingSlab({ 
+                                      id: `new-${template.id}`,
+                                      minAmount: template.minAmount,
+                                      maxAmount: template.maxAmount,
+                                      commissionType: template.commissionType,
+                                      commissionValue: template.commissionValue,
+                                      isActive: true 
+                                    })} 
+                                    className="px-3 py-1.5 bg-primary/5 text-primary text-[9px] font-black uppercase rounded-lg border border-primary/10 hover:bg-primary hover:text-white transition-all"
+                                  >
+                                    Set Charge
+                                  </button>
+                                )
+                              )}
                             </div>
                           </td>
                         </tr>
-                        {editingSlab?.id === s.id && (
-                        <tr><td colSpan={isAdmin ? 5 : 5} className="p-4 bg-gray-50/30"><ChargeForm isAdmin={isAdmin} initialData={s} context={{ serviceType: selService, applyOnRole: selRole }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
+                        {editingSlab?.id === slabId && (
+                        <tr><td colSpan={5} className="p-4 bg-gray-50/30"><ChargeForm isAdmin={isAdmin} initialData={mySlab || editingSlab} context={{ serviceType: selService, applyOnRole: selRole }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
                       )}
                       </React.Fragment>
                     );
@@ -356,44 +421,127 @@ export default function Commissions() {
     </div>
   );
 
-  const renderOverrideSelector = () => (
+  const renderOverrideSelector = () => {
+    const usersWithOverridesMap = new Map();
+    overrides.forEach(o => {
+      if (o.targetUser && !usersWithOverridesMap.has(o.targetUserId)) {
+        usersWithOverridesMap.set(o.targetUserId, o.targetUser);
+      }
+    });
+    const usersWithOverrides = Array.from(usersWithOverridesMap.values());
+
+    return (
     <div className="space-y-8 animate-slide-up">
       <div className="flex flex-col gap-4">
         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Search Managed User</label>
-        <UserSearch onSelect={u => { setTargetUser(u); setIsFormOpen(false); }} placeholder="Search user by name or email..." className="h-14" />
+        <UserSearch
+          onSelect={handleTargetUserSelect}
+          placeholder="Search user by name or email..."
+          className="h-14"
+          showResultsInline
+          loadOnMount
+        />
       </div>
+
+      {!targetUser && overrides.length > 0 && (
+        <div className="space-y-4 animate-slide-up mt-8">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">All Active Overrides</label>
+          <div className="glass-panel overflow-hidden border border-gray-100 shadow-sm rounded-3xl bg-white">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50/50">
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Target User</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Service</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Range (Min - Max)</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Charge</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {overrides.map(o => (
+                  <React.Fragment key={o.id}>
+                    <tr className="hover:bg-gray-50/30 transition-all">
+                      <td className="p-4">
+                        <div 
+                          className="flex flex-col cursor-pointer group" 
+                          onClick={() => handleTargetUserSelect(o.targetUser)}
+                        >
+                          <span className="font-black text-gray-900 text-[11px] group-hover:text-primary transition-colors uppercase">
+                            {o.targetUser?.profile?.ownerName || o.targetUser?.email}
+                          </span>
+                          <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">{o.targetUser?.role}</span>
+                        </div>
+                      </td>
+                      <td className="p-4 font-black text-gray-900 text-[10px] uppercase">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-black text-gray-900">{o.serviceType}</span>
+                          {o.setBy && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-[8px] text-gray-400 font-black tracking-tighter uppercase">Last Set By:</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${o.setBy.role === 'ADMIN' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                                {o.setBy?.profile?.ownerName || o.setBy?.role}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 text-xs font-bold text-gray-600">{formatRange(o.minAmount, o.maxAmount)}</td>
+                      <td className="p-4 text-right font-black text-emerald-600 text-sm">{formatCharge(o.commissionType, o.commissionValue)}</td>
+                      <td className="p-4 text-center">
+                        <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${o.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{o.isActive ? 'Active' : 'Paused'}</span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => setEditingSlab(editingSlab?.id === o.id ? null : o)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={14} /></button>
+                          {isAdmin && <button onClick={() => handleDelete(o.id, true)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>}
+                        </div>
+                      </td>
+                    </tr>
+                    {editingSlab?.id === o.id && (
+                      <tr><td colSpan="6" className="p-4 bg-gray-50/30"><ChargeForm isAdmin={isAdmin} initialData={o} context={{ targetUserId: o.targetUserId, serviceType: o.serviceType }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {targetUser && (
         <div className="space-y-8 animate-slide-up">
           <div className="p-8 bg-primary/5 rounded-3xl border border-primary/10 flex flex-wrap justify-between items-center gap-6">
             <div className="flex items-center gap-6">
               <div className="w-20 h-20 rounded-full bg-white shadow-xl flex items-center justify-center text-primary text-3xl font-black">
-                {targetUser.profile?.ownerName?.charAt(0) || 'U'}
+                {(targetUser.profile?.ownerName || targetUser.ownerName || targetUser.shopName || targetUser.email || 'U').charAt(0)}
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-3">
-                   <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase">{targetUser.profile?.ownerName || 'User Profile'}</h2>
+                   <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase">{targetUser.profile?.ownerName || targetUser.ownerName || targetUser.shopName || 'User Profile'}</h2>
                    <span className="px-3 py-1 bg-white rounded-full text-[9px] font-black text-primary border border-primary/20">{targetUser.role}</span>
                 </div>
                 <div className="flex items-center gap-4 text-xs font-bold text-gray-400 uppercase">
                   <span>{targetUser.email}</span>
                   <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                  <span>{targetUser.profile?.mobileNumber}</span>
+                  <span>{targetUser.profile?.mobileNumber || 'N/A'}</span>
                   <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                   <span className="text-emerald-600 font-black">₹{Number(targetUser.wallet?.balance || 0).toFixed(2)}</span>
                 </div>
-                <div className="text-[10px] text-gray-400 font-bold truncate max-w-[300px]">{targetUser.profile?.fullAddress}</div>
+                <div className="text-[10px] text-gray-400 font-bold truncate max-w-[300px]">{targetUser.profile?.fullAddress || 'Address not available'}</div>
               </div>
             </div>
             <div className="flex gap-3">
-               <button onClick={() => { setEditingSlab(null); setIsFormOpen(!isFormOpen); }} className="btn-premium btn-premium-primary px-8 h-12 shadow-lg">
-                 {isFormOpen ? 'CANCEL' : 'ADD OVERRIDE'}
-               </button>
+               {isAdmin && (
+                 <button onClick={() => { setEditingSlab(null); setIsFormOpen(!isFormOpen); }} className="btn-premium btn-premium-primary px-8 h-12 shadow-lg">
+                   {isFormOpen ? 'CANCEL' : 'ADD OVERRIDE'}
+                 </button>
+               )}
                <button onClick={() => setTargetUser(null)} className="btn-premium btn-premium-secondary p-3 rounded-full hover:rotate-90 transition-all"><X size={20} /></button>
             </div>
           </div>
 
-          {isFormOpen && !editingSlab && (
+          {isFormOpen && isAdmin && !editingSlab && (
             <div className="animate-slide-up">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                  <select value={selService || 'PAYOUT'} onChange={e => setSelService(e.target.value)} className="form-input h-12 font-bold text-xs uppercase">
@@ -421,37 +569,84 @@ export default function Commissions() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredOverrides.length === 0 ? (
-                  <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">No overrides set for this user</td></tr>
+                {(isAdmin ? filteredOverrides : inheritedSlabs.filter(s => s.applyOnRole === targetUser.role)).length === 0 ? (
+                  <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">No slabs defined by Admin for this role</td></tr>
                 ) : (
-                  filteredOverrides.map(o => (
-                    <React.Fragment key={o.id}>
-                      <tr className="hover:bg-gray-50/30 transition-all">
-                        <td className="p-4 font-black text-gray-900 text-[10px] uppercase">
-                          <div className="flex flex-col">
-                            <span className="font-black">{o.serviceType}</span>
-                            {o.setBy && (
-                              <span className="text-[8px] text-gray-400 font-black tracking-tighter">SET BY: {o.setBy?.profile?.ownerName || o.setBy?.email} ({o.setBy?.role})</span>
+                  (isAdmin ? filteredOverrides : inheritedSlabs.filter(s => s.applyOnRole === targetUser.role)).map(template => {
+                    const myOverride = isAdmin ? template : filteredOverrides.find(o => 
+                      o.serviceType === template.serviceType &&
+                      Number(o.minAmount).toFixed(2) === Number(template.minAmount).toFixed(2) &&
+                      (o.maxAmount === null ? template.maxAmount === null : Number(o.maxAmount).toFixed(2) === Number(template.maxAmount).toFixed(2))
+                    );
+
+                    const slabId = myOverride?.id || `ovr-${template.id}`;
+
+                    return (
+                      <React.Fragment key={template.id}>
+                        <tr className="hover:bg-gray-50/30 transition-all">
+                          <td className="p-4 font-black text-gray-900 text-[10px] uppercase">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-black text-gray-900">{template.serviceType}</span>
+                              {myOverride?.setBy && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] text-gray-400 font-black tracking-tighter uppercase">Last Set By:</span>
+                                  <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${myOverride.setBy.role === 'ADMIN' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                                    {myOverride.setBy?.profile?.ownerName || myOverride.setBy?.role}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-4 text-xs font-bold text-gray-600">{formatRange(template.minAmount, template.maxAmount)}</td>
+                          <td className="p-4 text-right font-black text-emerald-600 text-sm">
+                            {myOverride ? formatCharge(myOverride.commissionType, myOverride.commissionValue) : <span className="text-gray-300 text-[10px] uppercase">Default applies</span>}
+                          </td>
+                          <td className="p-4 text-center">
+                            {myOverride ? (
+                              <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${myOverride.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{myOverride.isActive ? 'Active' : 'Paused'}</span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-full text-[8px] font-black uppercase bg-gray-50 text-gray-300">No Override</span>
                             )}
-                          </div>
-                        </td>
-                        <td className="p-4 text-xs font-bold text-gray-600">{formatRange(o.minAmount, o.maxAmount)}</td>
-                        <td className="p-4 text-right font-black text-emerald-600 text-sm">{formatCharge(o.commissionType, o.commissionValue)}</td>
-                        <td className="p-4 text-center">
-                          <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${o.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{o.isActive ? 'Active' : 'Paused'}</span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => setEditingSlab(editingSlab?.id === o.id ? null : o)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={14} /></button>
-                            {isAdmin && <button onClick={() => handleDelete(o.id, true)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>}
-                          </div>
-                        </td>
-                      </tr>
-                      {editingSlab?.id === o.id && (
-                        <tr><td colSpan="5" className="p-4 bg-gray-50/30"><ChargeForm isAdmin={isAdmin} initialData={o} context={{ targetUserId: targetUser.id, serviceType: o.serviceType }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              {myOverride ? (
+                                <>
+                                  <button onClick={() => setEditingSlab(editingSlab?.id === myOverride.id ? null : myOverride)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                    <Edit2 size={14} />
+                                  </button>
+                                  {isAdmin && (
+                                    <button onClick={() => handleDelete(myOverride.id, true)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                !isAdmin && (
+                                  <button 
+                                    onClick={() => setEditingSlab({ 
+                                      id: `ovr-${template.id}`,
+                                      minAmount: template.minAmount,
+                                      maxAmount: template.maxAmount,
+                                      commissionType: template.commissionType,
+                                      commissionValue: template.commissionValue,
+                                      isActive: true 
+                                    })} 
+                                    className="px-3 py-1.5 bg-primary/5 text-primary text-[9px] font-black uppercase rounded-lg border border-primary/10 hover:bg-primary hover:text-white transition-all"
+                                  >
+                                    Set Override
+                                  </button>
+                                )
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {editingSlab?.id === slabId && (
+                        <tr><td colSpan={5} className="p-4 bg-gray-50/30"><ChargeForm isAdmin={isAdmin} initialData={myOverride || editingSlab} context={{ targetUserId: targetUser.id, serviceType: template.serviceType }} onCancel={() => setEditingSlab(null)} onSaved={() => { fetchData(); setEditingSlab(null); }} /></td></tr>
                       )}
-                    </React.Fragment>
-                  ))
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -460,6 +655,7 @@ export default function Commissions() {
       )}
     </div>
   );
+  };
 
   return (
     <div className="flex-col gap-6 pb-20">

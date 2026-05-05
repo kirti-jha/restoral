@@ -454,9 +454,19 @@ const UserChargesForm = ({ targetUser, onCancel }) => {
             ) : (
               overrides.map(ov => (
                 <div key={ov.id} className="flex items-center justify-between p-3 bg-white border border-emerald-100 rounded-xl">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-gray-900">{ov.serviceType}</span>
-                    <span className="text-[9px] text-gray-500 font-bold">₹{ov.minAmount}-{ov.maxAmount || 'Max'}</span>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-gray-900">{ov.serviceType}</span>
+                      <span className="text-[9px] text-gray-500 font-bold">₹{ov.minAmount}-{ov.maxAmount || 'Max'}</span>
+                    </div>
+                    {ov.setBy && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[7px] text-gray-400 font-black tracking-tighter uppercase">Last Set By:</span>
+                        <span className={`px-1 py-0.5 rounded text-[6px] font-black uppercase ${ov.setBy.role === 'ADMIN' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                          {ov.setBy?.profile?.ownerName || ov.setBy?.role}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] font-black text-emerald-600">{formatChargeValue(ov.commissionType, ov.commissionValue)}</span>

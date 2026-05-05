@@ -234,7 +234,18 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
 export const searchUsers = async (req: AuthRequest, res: Response) => {
   const query = req.query.q as string | undefined;
   if (!query) {
-    res.json({ success: true, users: [] });
+    const hierarchyUsers = await fetchHierarchyUsers();
+    const children = hierarchyUsers.filter(u => u.parentId === req.user!.id);
+    res.json({
+      success: true,
+      users: children.slice(0, 10).map((u) => ({
+        id: u.id,
+        email: u.email,
+        role: u.role,
+        ownerName: u.profile?.ownerName,
+        shopName: u.profile?.shopName,
+      })),
+    });
     return;
   }
 
@@ -243,7 +254,7 @@ export const searchUsers = async (req: AuthRequest, res: Response) => {
     const visibleUserIds = getDescendantIds(req.user!.id, hierarchyUsers);
 
     if (visibleUserIds.length === 0) {
-      res.json({ success: true, users: [] });
+      res.json({ success: true, users: ["REPLACED"] });
       return;
     }
 
