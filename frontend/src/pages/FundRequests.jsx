@@ -77,6 +77,15 @@ function RequestModal({ isOpen, onClose, onSaved, bankAccounts }) {
   };
 
   const selectedAccount = bankAccounts.find((a) => a.id === formData.bankAccountId);
+  const bankAccountOptions = useMemo(
+    () =>
+      bankAccounts.map((acc) => (
+        <option key={acc.id} value={acc.id}>
+          {acc.bankName} (****{String(acc.accountNumber).slice(-4)})
+        </option>
+      )),
+    [bankAccounts]
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -130,11 +139,7 @@ function RequestModal({ isOpen, onClose, onSaved, bankAccounts }) {
                   onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
                   className="form-input h-12 bg-gray-50/50 border-gray-100 focus:bg-white text-sm font-bold"
                 >
-                  {useMemo(() => bankAccounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.bankName} (****{String(acc.accountNumber).slice(-4)})
-                    </option>
-                  )), [bankAccounts])}
+                  {bankAccountOptions}
                 </select>
               </div>
 
