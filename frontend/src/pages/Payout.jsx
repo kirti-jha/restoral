@@ -58,6 +58,7 @@ export default function Payout() {
   });
 
   const selectedBeneficiary = useMemo(
+    () => beneficiaries.find(b => b.id === formData.beneficiaryId),
     [beneficiaries, formData.beneficiaryId]
   );
 

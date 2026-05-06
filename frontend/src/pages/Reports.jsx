@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -36,7 +36,7 @@ export default function Reports() {
     reportTabs.push({ id: 'fund_added', label: 'Add Funds History', icon: ArrowUpRight });
   }
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ ...filters, type: activeTab });
@@ -52,7 +52,7 @@ export default function Reports() {
       console.error(err);
     }
     setLoading(false);
-  };
+  }, [activeTab, filters]);
 
   useEffect(() => {
     fetchData();
