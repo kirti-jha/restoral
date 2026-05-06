@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
 import { Users, Wallet, Activity, Clock, ArrowRight, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
@@ -30,7 +30,7 @@ export default function Dashboard() {
     to: ''
   });
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
       let url = '/reports/dashboard';
@@ -56,15 +56,15 @@ export default function Dashboard() {
       console.error('Failed to fetch stats', err);
     }
     setLoading(false);
-  };
+  }, [dateRange]);
 
   useEffect(() => {
     fetchStats();
   }, [dateRange]);
 
-  const handlePresetChange = (preset) => {
+  const handlePresetChange = useCallback((preset) => {
     setDateRange({ preset, from: '', to: '' });
-  };
+  }, []);
 
   const handleCustomDateChange = (e) => {
     const { name, value } = e.target;

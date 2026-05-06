@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../lib/api';
 import UserSearch from '../components/common/UserSearch';
 import { useAuth } from '../context/AuthContext';
@@ -600,7 +600,7 @@ export default function UserManagement() {
   const canImpersonate = ['ADMIN', 'SUPER', 'DISTRIBUTOR'].includes(user.role);
   const filterRoles = getAvailableRoles(user.role);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: '10' });
@@ -617,7 +617,7 @@ export default function UserManagement() {
       console.error(err);
     }
     setLoading(false);
-  };
+  }, [page, filterRole, filterStatus, searchQuery]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -626,7 +626,7 @@ export default function UserManagement() {
     return () => clearTimeout(timer);
   }, [page, filterRole, filterStatus, searchQuery]);
 
-  const toggleStatus = async (userId) => {
+  const toggleStatus = useCallback(async (userId) => {
     if (!window.confirm('Toggle user status?')) return;
     try {
       const { data } = await api.patch(`/users/${userId}/toggle`);
@@ -636,9 +636,9 @@ export default function UserManagement() {
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update status');
     }
-  };
+  }, [fetchUsers]);
 
-  const loginAsUser = async (userId) => {
+  const loginAsUser = useCallback(async (userId) => {
     try {
       const newTab = window.open('about:blank', '_blank');
       if (!newTab) {
@@ -659,7 +659,7 @@ export default function UserManagement() {
     } catch (err) {
       alert('Login As failed');
     }
-  };
+  }, []);
 
   const getRoleBadgeClass = (role) => {
     switch (role) {

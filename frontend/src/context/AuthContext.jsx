@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, [refreshUser]);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     try {
       const { data } = await api.post('/auth/login', { email: email.trim(), password });
       if (data.success) {
@@ -73,16 +73,24 @@ export const AuthProvider = ({ children }) => {
           : 'Login failed. Please try again.');
       return { success: false, message };
     }
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     setUser(null);
-  };
+  }, []);
+
+  const value = useMemo(() => ({
+    user,
+    login,
+    logout,
+    refreshUser,
+    loading
+  }), [user, login, logout, refreshUser, loading]);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, refreshUser, loading }}>
+    <AuthContext.Provider value={value}>
       {loading ? (
         <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>
       ) : (

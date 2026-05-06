@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -130,11 +130,11 @@ function RequestModal({ isOpen, onClose, onSaved, bankAccounts }) {
                   onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
                   className="form-input h-12 bg-gray-50/50 border-gray-100 focus:bg-white text-sm font-bold"
                 >
-                  {bankAccounts.map((acc) => (
+                  {useMemo(() => bankAccounts.map((acc) => (
                     <option key={acc.id} value={acc.id}>
                       {acc.bankName} (****{String(acc.accountNumber).slice(-4)})
                     </option>
-                  ))}
+                  )), [bankAccounts])}
                 </select>
               </div>
 
@@ -234,7 +234,7 @@ export default function FundRequests() {
   const [actionInProgress, setActionInProgress] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState('');
 
-  const fetchAll = async (showLoading = true) => {
+  const fetchAll = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
       let url = `/services?serviceType=FUND_REQUEST${filter ? `&status=${filter}` : ''}`;
@@ -250,7 +250,7 @@ export default function FundRequests() {
       setError('Unable to load fund requests');
     }
     setLoading(false);
-  };
+  }, [filter, selectedUserId]);
 
   useEffect(() => {
     fetchAll();
@@ -258,7 +258,7 @@ export default function FundRequests() {
     return () => clearInterval(interval);
   }, [filter, selectedUserId]);
 
-  const approveRequest = async (id) => {
+  const approveRequest = useCallback(async (id) => {
     if (actionInProgress) return;
     if (!window.confirm('Approve this fund request?')) return;
     setActionInProgress(id);
@@ -270,9 +270,9 @@ export default function FundRequests() {
     } finally {
       setActionInProgress(null);
     }
-  };
+  }, [actionInProgress, fetchAll]);
 
-  const rejectRequest = async (id) => {
+  const rejectRequest = useCallback(async (id) => {
     if (actionInProgress) return;
     if (!window.confirm('Reject this fund request?')) return;
     setActionInProgress(id);
@@ -284,7 +284,7 @@ export default function FundRequests() {
     } finally {
       setActionInProgress(null);
     }
-  };
+  }, [actionInProgress, fetchAll]);
 
   return (
     <div className="space-y-8 pb-20">
