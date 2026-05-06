@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -111,15 +111,17 @@ async function main() {
   });
 
   if (existingAdminSlabs === 0) {
+    const adminRoles = [Role.SUPER, Role.DISTRIBUTOR, Role.RETAILER];
+
     await prisma.commissionSlab.createMany({
-      data: [
-        { setById: admin.id, serviceType: 'PAYOUT', applyOnRole: 'SUPER', commissionType: 'FLAT', commissionValue: 5, minAmount: 100, maxAmount: 5000 },
-        { setById: admin.id, serviceType: 'PAYOUT', applyOnRole: 'SUPER', commissionType: 'FLAT', commissionValue: 15, minAmount: 5001, maxAmount: 25000 },
-        { setById: admin.id, serviceType: 'PAYOUT', applyOnRole: 'SUPER', commissionType: 'FLAT', commissionValue: 25, minAmount: 25001, maxAmount: 50000 },
-        { setById: admin.id, serviceType: 'PAYOUT', applyOnRole: 'SUPER', commissionType: 'FLAT', commissionValue: 40, minAmount: 50001, maxAmount: 100000 },
-        { setById: admin.id, serviceType: 'FUND_REQUEST', applyOnRole: 'SUPER', commissionType: 'FLAT', commissionValue: 5, minAmount: 100, maxAmount: 5000 },
-        { setById: admin.id, serviceType: 'FUND_REQUEST', applyOnRole: 'SUPER', commissionType: 'FLAT', commissionValue: 15, minAmount: 5001, maxAmount: 25000 },
-      ],
+      data: adminRoles.flatMap((role) => [
+        { setById: admin.id, serviceType: 'PAYOUT', applyOnRole: role, commissionType: 'FLAT', commissionValue: 5, minAmount: 100, maxAmount: 5000 },
+        { setById: admin.id, serviceType: 'PAYOUT', applyOnRole: role, commissionType: 'FLAT', commissionValue: 15, minAmount: 5001, maxAmount: 25000 },
+        { setById: admin.id, serviceType: 'PAYOUT', applyOnRole: role, commissionType: 'FLAT', commissionValue: 25, minAmount: 25001, maxAmount: 50000 },
+        { setById: admin.id, serviceType: 'PAYOUT', applyOnRole: role, commissionType: 'FLAT', commissionValue: 40, minAmount: 50001, maxAmount: 100000 },
+        { setById: admin.id, serviceType: 'FUND_REQUEST', applyOnRole: role, commissionType: 'FLAT', commissionValue: 5, minAmount: 100, maxAmount: 5000 },
+        { setById: admin.id, serviceType: 'FUND_REQUEST', applyOnRole: role, commissionType: 'FLAT', commissionValue: 15, minAmount: 5001, maxAmount: 25000 },
+      ]),
     });
   }
 

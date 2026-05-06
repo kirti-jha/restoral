@@ -198,7 +198,18 @@ exports.getUsers = getUsers;
 const searchUsers = async (req, res) => {
     const query = req.query.q;
     if (!query) {
-        res.json({ success: true, users: [] });
+        const hierarchyUsers = await (0, userHierarchy_service_1.fetchHierarchyUsers)();
+        const children = hierarchyUsers.filter(u => u.parentId === req.user.id);
+        res.json({
+            success: true,
+            users: children.slice(0, 10).map((u) => ({
+                id: u.id,
+                email: u.email,
+                role: u.role,
+                ownerName: u.profile?.ownerName,
+                shopName: u.profile?.shopName,
+            })),
+        });
         return;
     }
     try {

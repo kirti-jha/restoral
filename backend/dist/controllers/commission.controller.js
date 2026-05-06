@@ -31,20 +31,18 @@ function dedupeCommissionSlabs(rows) {
     });
 }
 function dedupeUserOverrides(rows) {
-    const seen = new Set();
-    return rows.filter((row) => {
+    // Use a Map to keep the LAST seen record for each unique (target, service, range)
+    // Since the input rows are ordered by createdAt ASC, the last one will be the newest.
+    const map = new Map();
+    for (const row of rows) {
         const key = [
+            row.targetUserId,
             row.serviceType,
-            row.commissionType,
-            (0, commission_service_1.toDecimalAmount)(row.commissionValue).toFixed(2),
             getRangeKey(row.minAmount, row.maxAmount),
         ].join('|');
-        if (seen.has(key)) {
-            return false;
-        }
-        seen.add(key);
-        return true;
-    });
+        map.set(key, row);
+    }
+    return Array.from(map.values());
 }
 function sendBadRequest(res, message) {
     res.status(400).json({ success: false, message });
@@ -142,15 +140,16 @@ const getSlabs = async (req, res) => {
         });
         let inheritedSlabs = [];
         if (actorRole !== 'ADMIN') {
-            const hierarchy = await (0, userHierarchy_service_1.fetchHierarchyUsers)();
+            const allowedRoles = (0, commission_service_1.getAssignableRateRoles)(actorRole);
+            // Include actor's own role to see inherited base rates
+            const rolesToFetch = [...new Set([...allowedRoles, actorRole])];
             if (actor?.parentId) {
-                const parentId = actor.parentId;
                 inheritedSlabs = await prisma_1.default.commissionSlab.findMany({
                     where: {
-                        setById: parentId,
+                        setById: actor.parentId,
                         serviceType: { in: ['PAYOUT', 'FUND_REQUEST'] },
                         isActive: true,
-                        applyOnRole: actorRole,
+                        applyOnRole: { in: rolesToFetch },
                     },
                     include: {
                         setBy: {
@@ -213,6 +212,10 @@ const upsertSlab = async (req, res) => {
                 select: { id: true },
             });
             if (!existingRow) {
+                // If not found as owner, but Admin, allow it? No, user said only Admin can delete, but anyone can edit if it flows?
+                // Actually the user said "overall charge kisi perticular user pe specific ek hi hoga... chahe wo admin set kre ya user k upline member"
+                // This was for OVERRIDES. For Default Slabs, usually each manager has their own slabs.
+                // But for Overrides, they share.
                 res.status(404).json({ success: false, message: 'Default rate not found' });
                 return;
             }
@@ -262,10 +265,16 @@ const upsertSlab = async (req, res) => {
 exports.upsertSlab = upsertSlab;
 const deleteSlab = async (req, res) => {
     try {
+        if (req.user.role !== 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Only administrators can delete slabs' });
+            return;
+        }
         const deleted = await prisma_1.default.commissionSlab.deleteMany({
             where: {
                 id: req.params.id,
-                setById: req.user.id,
+                // Admins can delete any slab? User said "charges delete bs admin kr skta h"
+                // Usually means Admin can delete anyone's slab, or managers can't delete their own.
+                // If I'm Admin, I can delete any slab.
             },
         });
         if (deleted.count === 0) {
@@ -283,9 +292,22 @@ const deleteSlab = async (req, res) => {
 exports.deleteSlab = deleteSlab;
 const getUserOverrides = async (req, res) => {
     try {
-        const overrides = dedupeUserOverrides(await prisma_1.default.userCommissionSetup.findMany({
+        const actorId = req.user.id;
+        const actorRole = req.user.role;
+        const hierarchyUsers = await (0, userHierarchy_service_1.fetchHierarchyUsers)();
+        let targetIds;
+        if (actorRole === 'ADMIN') {
+            // Admins can see overrides for all users in the system
+            targetIds = hierarchyUsers.map(u => u.id);
+        }
+        else {
+            // Other managers only see overrides for their descendants
+            targetIds = (0, userHierarchy_service_1.getDescendantIds)(actorId, hierarchyUsers);
+        }
+        // Fetch overrides for anyone in hierarchy, regardless of who set it
+        const overrides = await prisma_1.default.userCommissionSetup.findMany({
             where: {
-                setById: req.user.id,
+                targetUserId: { in: targetIds },
                 serviceType: { in: ['PAYOUT', 'FUND_REQUEST'] },
             },
             include: {
@@ -294,18 +316,21 @@ const getUserOverrides = async (req, res) => {
                         id: true,
                         email: true,
                         role: true,
-                        profile: {
-                            select: {
-                                ownerName: true,
-                                shopName: true,
-                            },
-                        },
+                        profile: { select: { ownerName: true, shopName: true } },
+                    },
+                },
+                setBy: {
+                    select: {
+                        id: true,
+                        email: true,
+                        role: true,
+                        profile: { select: { ownerName: true, shopName: true } },
                     },
                 },
             },
-            orderBy: [{ targetUserId: 'asc' }, { serviceType: 'asc' }, { minAmount: 'asc' }, { createdAt: 'asc' }],
-        }));
-        res.json({ success: true, overrides });
+            orderBy: [{ targetUserId: 'asc' }, { serviceType: 'asc' }, { minAmount: 'asc' }, { createdAt: 'desc' }],
+        });
+        res.json({ success: true, overrides: dedupeUserOverrides(overrides) });
     }
     catch (error) {
         console.error(error);
@@ -347,47 +372,27 @@ const upsertUserOverride = async (req, res) => {
             sendBadRequest(res, inheritedFloorError);
             return;
         }
-        if (id) {
-            const existingRow = await prisma_1.default.userCommissionSetup.findFirst({
-                where: { id, setById: req.user.id },
-                select: { id: true },
-            });
-            if (!existingRow) {
-                res.status(404).json({ success: false, message: 'User override not found' });
-                return;
+        // Check for existing override on same (user, service, range) regardless of who set it
+        const existingOverride = await prisma_1.default.userCommissionSetup.findFirst({
+            where: {
+                targetUserId,
+                serviceType,
+                minAmount: normalizedMinAmount,
+                maxAmount: normalizedMaxAmount,
             }
-        }
-        const overlappingRow = await findOverlappingOverride(req.user.id, targetUserId, serviceType, normalizedMinAmount, normalizedMaxAmount, id);
-        if (overlappingRow) {
-            sendBadRequest(res, 'This amount range overlaps with an existing user override');
-            return;
-        }
-        const override = id
+        });
+        const override = existingOverride
             ? await prisma_1.default.userCommissionSetup.update({
-                where: { id },
+                where: { id: existingOverride.id },
                 data: {
-                    targetUserId,
-                    serviceType,
                     commissionType,
                     commissionValue: normalizedCommissionValue,
-                    minAmount: normalizedMinAmount,
-                    maxAmount: normalizedMaxAmount,
                     isActive,
+                    setById: req.user.id, // Update who last set it
                 },
                 include: {
-                    targetUser: {
-                        select: {
-                            id: true,
-                            email: true,
-                            role: true,
-                            profile: {
-                                select: {
-                                    ownerName: true,
-                                    shopName: true,
-                                },
-                            },
-                        },
-                    },
+                    targetUser: { select: { id: true, email: true, role: true, profile: { select: { ownerName: true, shopName: true } } } },
+                    setBy: { select: { id: true, email: true, role: true, profile: { select: { ownerName: true, shopName: true } } } },
                 },
             })
             : await prisma_1.default.userCommissionSetup.create({
@@ -402,22 +407,11 @@ const upsertUserOverride = async (req, res) => {
                     isActive,
                 },
                 include: {
-                    targetUser: {
-                        select: {
-                            id: true,
-                            email: true,
-                            role: true,
-                            profile: {
-                                select: {
-                                    ownerName: true,
-                                    shopName: true,
-                                },
-                            },
-                        },
-                    },
+                    targetUser: { select: { id: true, email: true, role: true, profile: { select: { ownerName: true, shopName: true } } } },
+                    setBy: { select: { id: true, email: true, role: true, profile: { select: { ownerName: true, shopName: true } } } },
                 },
             });
-        await (0, notification_service_1.notifyAdminsAndUser)(targetUserId, id ? 'Special Charge Updated' : 'Special Charge Applied', `${req.user.role} ${id ? 'updated' : 'set'} a ${serviceType} special charge for your account.`, 'INFO');
+        await (0, notification_service_1.notifyAdminsAndUser)(targetUserId, existingOverride ? 'Special Charge Updated' : 'Special Charge Applied', `${req.user.role} ${existingOverride ? 'updated' : 'set'} a ${serviceType} special charge for your account.`, 'INFO');
         res.json({ success: true, override });
     }
     catch (error) {
@@ -432,29 +426,22 @@ const upsertUserOverride = async (req, res) => {
 exports.upsertUserOverride = upsertUserOverride;
 const deleteUserOverride = async (req, res) => {
     try {
+        if (req.user.role !== 'ADMIN') {
+            res.status(403).json({ success: false, message: 'Only administrators can delete overrides' });
+            return;
+        }
         const existingOverride = await prisma_1.default.userCommissionSetup.findFirst({
-            where: {
-                id: req.params.id,
-                setById: req.user.id,
-            },
-            select: {
-                targetUserId: true,
-                serviceType: true,
-            },
+            where: { id: req.params.id },
+            select: { targetUserId: true, serviceType: true },
         });
-        const deleted = await prisma_1.default.userCommissionSetup.deleteMany({
-            where: {
-                id: req.params.id,
-                setById: req.user.id,
-            },
-        });
-        if (deleted.count === 0) {
+        if (!existingOverride) {
             res.status(404).json({ success: false, message: 'User override not found' });
             return;
         }
-        if (existingOverride) {
-            await (0, notification_service_1.notifyAdminsAndUser)(existingOverride.targetUserId, 'Special Charge Removed', `${req.user.role} removed a ${existingOverride.serviceType} special charge from your account.`, 'WARNING');
-        }
+        await prisma_1.default.userCommissionSetup.delete({
+            where: { id: req.params.id },
+        });
+        await (0, notification_service_1.notifyAdminsAndUser)(existingOverride.targetUserId, 'Special Charge Removed', `${req.user.role} removed a ${existingOverride.serviceType} special charge from your account.`, 'WARNING');
         res.json({ success: true });
     }
     catch (error) {
@@ -466,7 +453,13 @@ exports.deleteUserOverride = deleteUserOverride;
 const getOverrideTargets = async (req, res) => {
     try {
         const hierarchyUsers = await (0, userHierarchy_service_1.fetchHierarchyUsers)();
-        const targetIds = (0, userHierarchy_service_1.getDescendantIds)(req.user.id, hierarchyUsers);
+        let targetIds;
+        if (req.user.role === 'ADMIN') {
+            targetIds = hierarchyUsers.map(u => u.id);
+        }
+        else {
+            targetIds = (0, userHierarchy_service_1.getDescendantIds)(req.user.id, hierarchyUsers);
+        }
         const targets = await prisma_1.default.user.findMany({
             where: {
                 id: { in: targetIds },

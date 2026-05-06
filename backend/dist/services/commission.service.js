@@ -66,13 +66,10 @@ function computeCharge(row, amount) {
     }
     return toDecimalAmount(row.commissionValue).toNumber();
 }
-function resolveChargeWithinAncestorScope(user, scopedAncestors, serviceType, amountInput, defaults, overrides) {
+function resolveChargeWithinAncestorScope(user, scopedAncestors, serviceType, amountInput, defaults, overrides, fullChainContext) {
     const amount = toDecimalAmount(amountInput);
     const amountPaise = amount.mul(100).toDecimalPlaces(0).toNumber();
-    const scopeIds = new Set(scopedAncestors.map((ancestor) => ancestor.id));
-    const scopedDefaults = defaults.filter((row) => row.serviceType === serviceType && scopeIds.has(row.setById));
-    const scopedOverrides = overrides.filter((row) => row.serviceType === serviceType && scopeIds.has(row.setById) && row.targetUserId === user.id);
-    const row = selectResolvedRate(user, scopedAncestors, serviceType, amountPaise, scopedDefaults, scopedOverrides);
+    const row = selectResolvedRate(user, scopedAncestors, serviceType, amountPaise, defaults, overrides, fullChainContext, 'MANAGER_FIRST');
     if (!row) {
         return 0;
     }
@@ -162,19 +159,30 @@ async function loadRateContext(userId, serviceTypes, options = {}) {
         overrides: overrides.map(normalizeOverrideRow),
     };
 }
-function selectResolvedRate(user, ancestors, serviceType, amountPaise, defaults, overrides) {
+function selectResolvedRate(user, ancestors, serviceType, amountPaise, defaults, overrides, fullChainContext, targetPreference = 'REQUESTER_FIRST') {
+    const chain = fullChainContext || [user, ...ancestors];
     for (const ancestor of ancestors) {
-        // 1. Check for user-specific override from this ancestor
-        const override = overrides.find((row) => row.setById === ancestor.id && row.serviceType === serviceType && matchesAmount(row, amountPaise));
-        if (override)
-            return override;
-        // 2. Check for role-based default from this ancestor
-        const def = defaults.find((row) => row.setById === ancestor.id &&
-            row.serviceType === serviceType &&
-            row.applyOnRole === user.role &&
-            matchesAmount(row, amountPaise));
-        if (def)
-            return def;
+        const ancestorId = String(ancestor.id);
+        const ancestorIndex = chain.findIndex((chainUser) => String(chainUser.id) === ancestorId);
+        const targetsBeforePreference = ancestorIndex > 0 ? chain.slice(0, ancestorIndex) : [user];
+        const targets = targetPreference === 'MANAGER_FIRST' ? [...targetsBeforePreference].reverse() : targetsBeforePreference;
+        for (const target of targets) {
+            const targetId = String(target.id);
+            const override = overrides.find((row) => String(row.setById) === ancestorId &&
+                String(row.targetUserId) === targetId &&
+                row.serviceType === serviceType &&
+                matchesAmount(row, amountPaise));
+            if (override)
+                return override;
+        }
+        for (const target of targets) {
+            const def = defaults.find((row) => String(row.setById) === ancestorId &&
+                row.serviceType === serviceType &&
+                row.applyOnRole === target.role &&
+                matchesAmount(row, amountPaise));
+            if (def)
+                return def;
+        }
     }
     return null;
 }
@@ -309,10 +317,10 @@ async function buildChargeDistribution(userId, serviceType, amountInput) {
     if (beneficiaries.length === 0) {
         return [];
     }
+    const fullChain = [context.user, ...context.ancestors];
     const charges = await Promise.all(beneficiaries.map((_, index) => {
         const scopedAncestors = context.ancestors.slice(context.ancestors.length - 1 - index);
-        // ALWAYS use the original requester (context.user) to calculate the charge at this ancestor's level
-        return Promise.resolve(resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides));
+        return Promise.resolve(resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides, fullChain));
     }));
     const shares = [];
     for (let index = 0; index < beneficiaries.length; index += 1) {

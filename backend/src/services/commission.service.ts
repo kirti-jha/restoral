@@ -55,6 +55,7 @@ type NormalizedOverrideRow = NormalizedRateRow & {
 };
 
 type ResolvedRateRow = NormalizedDefaultRow | NormalizedOverrideRow;
+type RateTargetPreference = 'REQUESTER_FIRST' | 'MANAGER_FIRST';
 
 export type EffectiveChargeSlab = {
   serviceType: string;
@@ -159,7 +160,8 @@ function resolveChargeWithinAncestorScope(
     amountPaise,
     defaults,
     overrides,
-    fullChainContext
+    fullChainContext,
+    'MANAGER_FIRST'
   );
 
   if (!resolvedRow) {
@@ -282,7 +284,8 @@ function selectResolvedRate(
   amountPaise: number,
   defaults: NormalizedDefaultRow[],
   overrides: NormalizedOverrideRow[],
-  fullChainContext?: ChainUser[]
+  fullChainContext?: ChainUser[],
+  targetPreference: RateTargetPreference = 'REQUESTER_FIRST'
 ) {
   // Use provided context or build from user/ancestors
   const chain = fullChainContext || [user, ...ancestors];
@@ -295,7 +298,9 @@ function selectResolvedRate(
     
     // The targets are everyone in the chain from the end-user up to this ancestor.
     // We check them in order from nearest to end-user (Retailer) to most general.
-    const targets = ancestorIndex > 0 ? chain.slice(0, ancestorIndex) : [user];
+    const targetsBeforePreference = ancestorIndex > 0 ? chain.slice(0, ancestorIndex) : [user];
+    const targets =
+      targetPreference === 'MANAGER_FIRST' ? [...targetsBeforePreference].reverse() : targetsBeforePreference;
 
     // 1. Check for overrides for anyone in the sub-chain
     for (const target of targets) {
