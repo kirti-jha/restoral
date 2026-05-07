@@ -207,6 +207,8 @@ export function normalizeBranchxStatus(payload: any): BranchxStatus {
   return 'PENDING';
 }
 
+import { logApiInteraction } from './apiLog.service';
+
 export async function submitBranchxPayout(input: BranchxPayoutInput): Promise<BranchxServiceResult> {
   const { payoutEndpoint, timeoutMs } = getBranchxConfig();
   const url = buildUrl(payoutEndpoint);
@@ -250,6 +252,18 @@ export async function submitBranchxPayout(input: BranchxPayoutInput): Promise<Br
   const status = normalizeBranchxStatus(raw);
   const message = extractMessage(raw) || (response.ok ? 'BranchX payout request accepted' : `BranchX payout request failed with HTTP ${response.status}`);
   const statusCode = extractStatusCode(raw) || String(response.status);
+
+  await logApiInteraction({
+    refId: payload.requestId,
+    service: 'BranchX',
+    action: 'payout',
+    method: 'POST',
+    url,
+    requestPayload: payload,
+    responsePayload: raw,
+    statusCode: response.status,
+    status: status.toLowerCase()
+  });
 
   console.info(
     '[BranchX] payout_response',
@@ -311,6 +325,18 @@ export async function checkBranchxPayoutStatus(requestId: string): Promise<Branc
   const status = normalizeBranchxStatus(raw);
   const message = extractMessage(raw) || (response.ok ? 'BranchX payout status fetched' : `BranchX status check failed with HTTP ${response.status}`);
   const statusCode = extractStatusCode(raw) || String(response.status);
+
+  await logApiInteraction({
+    refId: payload.requestId,
+    service: 'BranchX',
+    action: 'status_check',
+    method: 'POST',
+    url,
+    requestPayload: payload,
+    responsePayload: raw,
+    statusCode: response.status,
+    status: status.toLowerCase()
+  });
 
   console.info(
     '[BranchX] payout_status_response',

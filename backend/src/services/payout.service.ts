@@ -13,6 +13,7 @@ import {
   normalizeBranchxStatus,
   submitBranchxPayout,
 } from './branchx.service';
+import { logApiInteraction } from './apiLog.service';
 
 type PayoutSubmissionInput = {
   beneficiaryId: string;
@@ -491,6 +492,19 @@ export async function submitPayoutRequest(userId: string, input: PayoutSubmissio
   const requestId = buildRequestId();
   const pendingRequest = await reservePayoutRequest(userId, beneficiary, quote, input, chargeDistribution, requestId);
 
+  await logApiInteraction({
+    transactionId: pendingRequest.id,
+    refId: requestId,
+    service: 'AbheePay',
+    action: 'merchant_payout_request',
+    type: 'incoming',
+    method: 'POST',
+    url: '/api/payout',
+    requestPayload: input,
+    responsePayload: { requestId, status: 'PENDING' },
+    status: 'pending'
+  });
+
   try {
     const providerResponse = await submitBranchxPayout({
       amount: quote.netAmount,
@@ -654,6 +668,19 @@ export async function processBranchxPayoutCallback(
       payload: stringifyPayload(payload),
       userAgent: meta.userAgent || null,
     },
+  });
+
+  await logApiInteraction({
+    transactionId: request?.id,
+    refId: requestIdentifier || undefined,
+    service: 'BranchX',
+    action: 'callback',
+    type: 'incoming',
+    method: meta.method,
+    requestPayload: payload,
+    ipAddress: meta.sourceIp,
+    userAgent: meta.userAgent || undefined,
+    status: normalizedStatus.toLowerCase()
   });
 
   const request = candidateIds.length
