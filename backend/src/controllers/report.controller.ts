@@ -257,6 +257,12 @@ export const getReport = async (req: AuthRequest, res: Response) => {
     where.status = 'PENDING';
   } else if (type === 'payout_history') {
     where.serviceType = 'PAYOUT';
+  } else if (type === 'super') {
+    const supers = await prisma.user.findMany({
+      where: { role: 'SUPER', parentId: req.user!.id },
+      select: { id: true },
+    });
+    where.userId = { in: supers.map((s) => s.id) };
   } else if (type === 'distributor') {
     const distributors = await prisma.user.findMany({
       where: { role: 'DISTRIBUTOR', parentId: req.user!.id },

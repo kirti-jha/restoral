@@ -69,11 +69,11 @@ function computeCharge(row, amount) {
 function resolveChargeWithinAncestorScope(user, scopedAncestors, serviceType, amountInput, defaults, overrides, fullChainContext) {
     const amount = toDecimalAmount(amountInput);
     const amountPaise = amount.mul(100).toDecimalPlaces(0).toNumber();
-    const row = selectResolvedRate(user, scopedAncestors, serviceType, amountPaise, defaults, overrides, fullChainContext, 'MANAGER_FIRST');
-    if (!row) {
+    const resolvedRow = selectResolvedRate(user, scopedAncestors, serviceType, amountPaise, defaults, overrides, fullChainContext, 'MANAGER_FIRST');
+    if (!resolvedRow) {
         return 0;
     }
-    return computeCharge(row, amount);
+    return computeCharge(resolvedRow, amount);
 }
 function getAssignableRateRoles(actorRole) {
     return exports.MANAGER_ROLE_SCOPE[actorRole] ?? [];
@@ -160,21 +160,26 @@ async function loadRateContext(userId, serviceTypes, options = {}) {
     };
 }
 function selectResolvedRate(user, ancestors, serviceType, amountPaise, defaults, overrides, fullChainContext, targetPreference = 'REQUESTER_FIRST') {
+    // Use provided context or build from user/ancestors
     const chain = fullChainContext || [user, ...ancestors];
     for (const ancestor of ancestors) {
         const ancestorId = String(ancestor.id);
-        const ancestorIndex = chain.findIndex((chainUser) => String(chainUser.id) === ancestorId);
+        // Find who is below this ancestor in the chain to check for hierarchical rates
+        const ancestorIndex = chain.findIndex((u) => String(u.id) === ancestorId);
+        // The targets are everyone in the chain from the end-user up to this ancestor.
+        // We check them in order from nearest to end-user (Retailer) to most general.
         const targetsBeforePreference = ancestorIndex > 0 ? chain.slice(0, ancestorIndex) : [user];
         const targets = targetPreference === 'MANAGER_FIRST' ? [...targetsBeforePreference].reverse() : targetsBeforePreference;
+        // 1. Check for overrides for anyone in the sub-chain
         for (const target of targets) {
             const targetId = String(target.id);
-            const override = overrides.find((row) => String(row.setById) === ancestorId &&
-                String(row.targetUserId) === targetId &&
+            const override = overrides.find((row) => String(row.targetUserId) === targetId &&
                 row.serviceType === serviceType &&
                 matchesAmount(row, amountPaise));
             if (override)
                 return override;
         }
+        // 2. Check for defaults from this ancestor for any roles in the sub-chain
         for (const target of targets) {
             const def = defaults.find((row) => String(row.setById) === ancestorId &&
                 row.serviceType === serviceType &&
@@ -320,6 +325,8 @@ async function buildChargeDistribution(userId, serviceType, amountInput) {
     const fullChain = [context.user, ...context.ancestors];
     const charges = await Promise.all(beneficiaries.map((_, index) => {
         const scopedAncestors = context.ancestors.slice(context.ancestors.length - 1 - index);
+        // Evaluates what this ancestor charges the original requester, 
+        // incorporating hierarchical fallbacks if specific rates for roles/users are missing.
         return Promise.resolve(resolveChargeWithinAncestorScope(context.user, scopedAncestors, serviceType, amount, context.defaults, context.overrides, fullChain));
     }));
     const shares = [];
