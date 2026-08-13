@@ -19,6 +19,15 @@ function buildPublicUserPayload(user) {
         transactionPinSet: Boolean(user.transactionPinHash),
     };
 }
+function getJwtSecret(res) {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+        console.error('JWT_SECRET is not configured');
+        res.status(500).json({ success: false, message: 'Server auth configuration is missing' });
+        return null;
+    }
+    return jwtSecret;
+}
 const login = async (req, res) => {
     const { email, password } = req.body;
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
@@ -45,7 +54,10 @@ const login = async (req, res) => {
             res.status(403).json({ success: false, message: 'Account is deactivated' });
             return;
         }
-        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        const jwtSecret = getJwtSecret(res);
+        if (!jwtSecret)
+            return;
+        const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, jwtSecret, { expiresIn: '7d' });
         res.json({
             success: true,
             token,
@@ -118,7 +130,10 @@ const loginAs = async (req, res) => {
             res.status(403).json({ success: false, message: 'Target user account is deactivated' });
             return;
         }
-        const token = jsonwebtoken_1.default.sign({ id: targetUser.id, role: targetUser.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        const jwtSecret = getJwtSecret(res);
+        if (!jwtSecret)
+            return;
+        const token = jsonwebtoken_1.default.sign({ id: targetUser.id, role: targetUser.role }, jwtSecret, { expiresIn: '7d' });
         res.json({
             success: true,
             token,
