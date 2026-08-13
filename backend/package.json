@@ -2,7 +2,7 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "api/index.js",
+  "main": "api/index.ts",
   "scripts": {
     "prisma:generate": "prisma generate",
     "prisma:ensure": "node scripts/ensure-prisma-client.js",
