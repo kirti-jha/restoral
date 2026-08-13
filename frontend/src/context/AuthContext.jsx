@@ -68,6 +68,8 @@ export const AuthProvider = ({ children }) => {
       console.error('Login error:', err);
       const message =
         err.response?.data?.message ||
+        err.response?.data?.error?.message ||
+        err.response?.data?.error?.code ||
         (err.request
           ? 'Unable to reach the server. Make sure the backend is running and the API URL is correct.'
           : 'Login failed. Please try again.');

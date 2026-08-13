@@ -28,10 +28,20 @@ function getJwtSecret(res: Response) {
   return jwtSecret;
 }
 
+function ensureDatabaseConfigured(res: Response) {
+  if (process.env.DATABASE_URL) return true;
+
+  console.error('DATABASE_URL is not configured');
+  res.status(500).json({ success: false, message: 'Server database configuration is missing' });
+  return false;
+}
+
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
   try {
+    if (!ensureDatabaseConfigured(res)) return;
+
     const user = await prisma.user.findFirst({
       where: {
         email: {
