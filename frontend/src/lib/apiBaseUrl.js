@@ -1,5 +1,5 @@
 const LOCAL_API_BASE_URL = 'http://localhost:5000/api';
-const PROD_API_BASE_URL = 'https://pay-in-pay-out.vercel.app/api';
+const PROD_API_BASE_URL = '/api';
 
 export function getApiBaseUrl() {
   const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
