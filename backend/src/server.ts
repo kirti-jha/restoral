@@ -34,14 +34,21 @@ const configuredAllowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .filter(Boolean);
 const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredAllowedOrigins]);
 
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  if (allowedOrigins.has(origin)) return true;
+  if (/\.vercel\.app$/.test(origin)) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.has(origin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
-      return;
+    } else {
+      callback(null, false);
     }
-
-    callback(new Error(`CORS origin not allowed: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -51,7 +58,7 @@ app.use(cors({
 app.use((req, res, next) => {
   const requestOrigin = req.headers.origin;
 
-  if (requestOrigin && allowedOrigins.has(requestOrigin)) {
+  if (requestOrigin && isAllowedOrigin(requestOrigin)) {
     res.header('Access-Control-Allow-Origin', requestOrigin);
   }
 

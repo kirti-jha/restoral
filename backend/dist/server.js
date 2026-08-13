@@ -36,13 +36,25 @@ const configuredAllowedOrigins = (process.env.ALLOWED_ORIGINS || '')
     .map((origin) => origin.trim())
     .filter(Boolean);
 const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredAllowedOrigins]);
+function isAllowedOrigin(origin) {
+    if (!origin)
+        return true;
+    if (allowedOrigins.has(origin))
+        return true;
+    if (/\.vercel\.app$/.test(origin))
+        return true;
+    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
+        return true;
+    return false;
+}
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.has(origin)) {
+        if (isAllowedOrigin(origin)) {
             callback(null, true);
-            return;
         }
-        callback(new Error(`CORS origin not allowed: ${origin}`));
+        else {
+            callback(null, false);
+        }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -50,7 +62,7 @@ app.use((0, cors_1.default)({
 }));
 app.use((req, res, next) => {
     const requestOrigin = req.headers.origin;
-    if (requestOrigin && allowedOrigins.has(requestOrigin)) {
+    if (requestOrigin && isAllowedOrigin(requestOrigin)) {
         res.header('Access-Control-Allow-Origin', requestOrigin);
     }
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
