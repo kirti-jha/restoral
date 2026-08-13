@@ -296,8 +296,8 @@ export default function FundRequests() {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">FUND REQUESTS</h1>
-          <p className="text-gray-400 font-medium mt-1 uppercase text-xs tracking-widest">Manage your wallet deposits</p>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">PAY-IN COLLECTIONS</h1>
+          <p className="text-gray-400 font-medium mt-1 uppercase text-xs tracking-widest">Manage customer pay-ins and wallet deposits</p>
         </div>
         {!isAdmin && (
           <button

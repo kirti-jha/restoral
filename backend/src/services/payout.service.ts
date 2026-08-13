@@ -670,6 +670,16 @@ export async function processBranchxPayoutCallback(
     },
   });
 
+  const request = candidateIds.length
+    ? await prisma.serviceRequest.findFirst({
+        where: {
+          serviceType: 'PAYOUT',
+          bankRef: { in: candidateIds },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : null;
+
   await logApiInteraction({
     transactionId: request?.id,
     refId: requestIdentifier || undefined,
@@ -682,16 +692,6 @@ export async function processBranchxPayoutCallback(
     userAgent: meta.userAgent || undefined,
     status: normalizedStatus.toLowerCase()
   });
-
-  const request = candidateIds.length
-    ? await prisma.serviceRequest.findFirst({
-        where: {
-          serviceType: 'PAYOUT',
-          bankRef: { in: candidateIds },
-        },
-        orderBy: { createdAt: 'desc' },
-      })
-    : null;
 
   if (!request) {
     console.warn('[BranchX] payout_callback_unmatched', {

@@ -22,13 +22,12 @@ const ROLE_LABELS = {
 };
 
 const SERVICE_OPTIONS = [
-  { value: 'PAYOUT', label: 'Payout', icon: ArrowRightLeft },
-  { value: 'FUND_REQUEST', label: 'Fund Request', icon: CreditCard },
+  { value: 'FUND_REQUEST', label: 'Pay-In Collection', icon: CreditCard },
 ];
 
 const SERVICE_LABELS = {
   PAYOUT: 'Payout',
-  FUND_REQUEST: 'Fund Request',
+  FUND_REQUEST: 'Pay-In Collection',
 };
 
 const COMMISSION_TYPE_OPTIONS = [
@@ -185,7 +184,7 @@ export default function Commissions() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(canManageRates ? 'defaults' : 'myCharges');
   
-  const [selService, setSelService] = useState(null);
+  const [selService, setSelService] = useState('FUND_REQUEST');
   const [selRole, setSelRole] = useState(null);
   const [targetUser, setTargetUser] = useState(null);
   

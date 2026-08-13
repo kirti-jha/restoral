@@ -152,6 +152,7 @@ function normalizeBranchxStatus(payload) {
     }
     return 'PENDING';
 }
+const apiLog_service_1 = require("./apiLog.service");
 async function submitBranchxPayout(input) {
     const { payoutEndpoint, timeoutMs } = getBranchxConfig();
     const url = buildUrl(payoutEndpoint);
@@ -185,6 +186,17 @@ async function submitBranchxPayout(input) {
     const status = normalizeBranchxStatus(raw);
     const message = extractMessage(raw) || (response.ok ? 'BranchX payout request accepted' : `BranchX payout request failed with HTTP ${response.status}`);
     const statusCode = extractStatusCode(raw) || String(response.status);
+    await (0, apiLog_service_1.logApiInteraction)({
+        refId: payload.requestId,
+        service: 'BranchX',
+        action: 'payout',
+        method: 'POST',
+        url,
+        requestPayload: payload,
+        responsePayload: raw,
+        statusCode: response.status,
+        status: status.toLowerCase()
+    });
     console.info('[BranchX] payout_response', JSON.stringify({
         url,
         requestId: payload.requestId,
@@ -229,6 +241,17 @@ async function checkBranchxPayoutStatus(requestId) {
     const status = normalizeBranchxStatus(raw);
     const message = extractMessage(raw) || (response.ok ? 'BranchX payout status fetched' : `BranchX status check failed with HTTP ${response.status}`);
     const statusCode = extractStatusCode(raw) || String(response.status);
+    await (0, apiLog_service_1.logApiInteraction)({
+        refId: payload.requestId,
+        service: 'BranchX',
+        action: 'status_check',
+        method: 'POST',
+        url,
+        requestPayload: payload,
+        responsePayload: raw,
+        statusCode: response.status,
+        status: status.toLowerCase()
+    });
     console.info('[BranchX] payout_status_response', JSON.stringify({
         url,
         requestId: payload.requestId,

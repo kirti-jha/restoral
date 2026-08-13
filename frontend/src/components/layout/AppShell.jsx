@@ -52,18 +52,18 @@ export default function AppShell() {
   }
 
   const navLinks = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     ...(user.role !== 'RETAILER' ? [
-      { name: 'User Management', path: '/users', icon: Users },
-      { name: 'Charges', path: '/commissions', icon: Settings },
-      { name: 'Commissions', path: '/commission-report', icon: Coins },
+      { name: 'Merchant Network', path: '/users', icon: Users },
+      // { name: 'Pay-In MDR & Rates', path: '/commissions', icon: Settings },
+      { name: 'Pay-In Commissions', path: '/commission-report', icon: Coins },
     ] : []),
-    { name: 'Wallet', path: '/wallet', icon: Wallet },
-    { name: 'Fund Requests', path: '/funds', icon: Banknote },
-    { name: 'Bank Verification', path: '/bank-verify', icon: Building2 },
-    { name: 'Payout', path: '/payout', icon: Send },
-    { name: 'Reports', path: '/reports', icon: FileText },
-    { name: 'Settings', path: '/settings', icon: Settings },
+    { name: 'Pay-In Collections', path: '/funds', icon: Banknote },
+    { name: 'Wallet & Settlements', path: '/wallet', icon: Wallet },
+    // { name: 'Bank Verification', path: '/bank-verify', icon: Building2 },
+    // { name: 'Payout', path: '/payout', icon: Send },
+    { name: 'Pay-In Reports', path: '/reports', icon: FileText },
+    { name: 'Settings & API Keys', path: '/settings', icon: Settings },
   ];
 
   useEffect(() => {

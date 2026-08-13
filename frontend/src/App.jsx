@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import AppShell from './components/layout/AppShell';
-import Login from './pages/Login';
+import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import UserManagement from './pages/UserManagement';
 import Commissions from './pages/Commissions';
@@ -14,14 +14,6 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import FundRequests from './pages/FundRequests';
 import KycVerification from './pages/KycVerification';
-
-// Placeholder Pages
-const Placeholder = ({ title }) => (
-  <div className="card p-6">
-    <h2>{title}</h2>
-    <p className="text-muted mt-2">This module is under construction.</p>
-  </div>
-);
 
 function App() {
   React.useEffect(() => {
@@ -41,10 +33,11 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LandingPage />} />
           
           <Route element={<AppShell />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/funds" element={<FundRequests />} />

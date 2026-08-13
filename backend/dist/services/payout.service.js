@@ -15,6 +15,7 @@ const crypto_1 = require("crypto");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const commission_service_1 = require("./commission.service");
 const branchx_service_1 = require("./branchx.service");
+const apiLog_service_1 = require("./apiLog.service");
 function createHttpError(message, statusCode) {
     const error = new Error(message);
     error.statusCode = statusCode;
@@ -370,6 +371,18 @@ async function submitPayoutRequest(userId, input) {
     const chargeDistribution = await (0, commission_service_1.buildChargeDistribution)(userId, 'PAYOUT', amount);
     const requestId = buildRequestId();
     const pendingRequest = await reservePayoutRequest(userId, beneficiary, quote, input, chargeDistribution, requestId);
+    await (0, apiLog_service_1.logApiInteraction)({
+        transactionId: pendingRequest.id,
+        refId: requestId,
+        service: 'AbheePay',
+        action: 'merchant_payout_request',
+        type: 'incoming',
+        method: 'POST',
+        url: '/api/payout',
+        requestPayload: input,
+        responsePayload: { requestId, status: 'PENDING' },
+        status: 'pending'
+    });
     try {
         const providerResponse = await (0, branchx_service_1.submitBranchxPayout)({
             amount: quote.netAmount,
@@ -505,6 +518,18 @@ async function processBranchxPayoutCallback(payload, meta) {
             orderBy: { createdAt: 'desc' },
         })
         : null;
+    await (0, apiLog_service_1.logApiInteraction)({
+        transactionId: request?.id,
+        refId: requestIdentifier || undefined,
+        service: 'BranchX',
+        action: 'callback',
+        type: 'incoming',
+        method: meta.method,
+        requestPayload: payload,
+        ipAddress: meta.sourceIp,
+        userAgent: meta.userAgent || undefined,
+        status: normalizedStatus.toLowerCase()
+    });
     if (!request) {
         console.warn('[BranchX] payout_callback_unmatched', {
             requestIdentifier,

@@ -216,7 +216,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Pending Fund Request */}
+        {/* Pending Pay-In Requests */}
         <div className="card group hover:shadow-md transition-all duration-300 relative overflow-hidden bg-white border border-gray-100">
           <div className="p-4 md:p-6 relative">
             <div className="flex justify-between items-start mb-4">
@@ -225,7 +225,7 @@ export default function Dashboard() {
               </div>
               <div className="text-xs font-bold text-amber-600">Pending</div>
             </div>
-            <h3 className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">Fund Requests</h3>
+            <h3 className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">Pending Pay-Ins</h3>
             <div className="text-xl md:text-2xl font-black text-gray-900 mt-1">{stats.pendingFundRequests}</div>
           </div>
         </div>

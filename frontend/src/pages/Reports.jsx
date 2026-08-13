@@ -12,18 +12,17 @@ export default function Reports() {
   const [data, setData] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('payout_pending');
+  const [activeTab, setActiveTab] = useState('fund_added');
   
   const [filters, setFilters] = useState({
     from: '', to: '', userId: '', status: ''
   });
 
   const reportTabs = [
-    { id: 'payout_pending', label: 'Payout Pending', icon: Clock },
-    { id: 'payout_history', label: 'Payout History', icon: History },
-    { id: 'transaction', label: 'Transaction Report', icon: List },
+    { id: 'fund_added', label: 'Pay-In Collections History', icon: ArrowUpRight },
+    { id: 'transaction', label: 'Pay-In Transactions', icon: List },
     { id: 'ledger', label: 'Account Ledger', icon: CreditCard },
-    { id: 'retailer', label: 'Retailer Report', icon: Users },
+    { id: 'retailer', label: 'Retailer Pay-In Report', icon: Users },
   ];
 
   if (['ADMIN', 'SUPER'].includes(user.role)) {
@@ -31,9 +30,6 @@ export default function Reports() {
   }
   if (user.role === 'ADMIN') {
     reportTabs.push({ id: 'super', label: 'Super Distributor Report', icon: Users });
-  }
-  if (['ADMIN', 'SUPER'].includes(user.role)) {
-    reportTabs.push({ id: 'fund_added', label: 'Add Funds History', icon: ArrowUpRight });
   }
 
   const fetchData = useCallback(async () => {
