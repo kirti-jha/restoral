@@ -4,6 +4,47 @@ import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
 import { canManageTarget, fetchHierarchyUsers } from '../services/userHierarchy.service';
 
+const publicUserBaseSelect = {
+  id: true,
+  email: true,
+  role: true,
+  isActive: true,
+  profile: true,
+  wallet: true,
+} as const;
+
+const publicUserSelect = {
+  ...publicUserBaseSelect,
+  transactionPinHash: true,
+} as const;
+
+const authUserSelect = {
+  ...publicUserSelect,
+  passwordHash: true,
+} as const;
+
+const authUserBaseSelect = {
+  ...publicUserBaseSelect,
+  passwordHash: true,
+} as const;
+
+function isMissingTransactionPinColumnError(error: any) {
+  return error?.code === 'P2022' && String(error?.meta?.column || error?.message || '').includes('transactionPinHash');
+}
+
+async function withTransactionPinFallback<T>(query: () => Promise<T>, fallbackQuery: () => Promise<T>) {
+  try {
+    return await query();
+  } catch (error) {
+    if (isMissingTransactionPinColumnError(error)) {
+      console.warn('transactionPinHash column is missing; continuing auth response without transaction PIN state');
+      return fallbackQuery();
+    }
+
+    throw error;
+  }
+}
+
 function buildPublicUserPayload(user: any) {
   return {
     id: user.id,
@@ -42,15 +83,26 @@ export const login = async (req: Request, res: Response) => {
   try {
     if (!ensureDatabaseConfigured(res)) return;
 
-    const user = await prisma.user.findFirst({
-      where: {
-        email: {
-          equals: normalizedEmail,
-          mode: 'insensitive',
+    const user = await withTransactionPinFallback(
+      () => prisma.user.findFirst({
+        where: {
+          email: {
+            equals: normalizedEmail,
+            mode: 'insensitive',
+          },
         },
-      },
-      include: { profile: true, wallet: true },
-    });
+        select: authUserSelect,
+      }),
+      () => prisma.user.findFirst({
+        where: {
+          email: {
+            equals: normalizedEmail,
+            mode: 'insensitive',
+          },
+        },
+        select: authUserBaseSelect,
+      }),
+    );
     if (!user) {
       res.status(401).json({ success: false, message: 'Invalid credentials' });
       return;
@@ -85,10 +137,16 @@ export const login = async (req: Request, res: Response) => {
 
 export const getMe = async (req: any, res: Response) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      include: { profile: true, wallet: true },
-    });
+    const user = await withTransactionPinFallback(
+      () => prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: publicUserSelect,
+      }),
+      () => prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: publicUserBaseSelect,
+      }),
+    );
     if (!user) {
       res.status(404).json({ success: false, message: 'User not found' });
       return;
@@ -132,10 +190,16 @@ export const loginAs = async (req: any, res: Response) => {
       res.status(403).json({ success: false, message: 'Forbidden: You cannot login as this user' });
       return;
     }
-    const targetUser = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { profile: true, wallet: true },
-    });
+    const targetUser = await withTransactionPinFallback(
+      () => prisma.user.findUnique({
+        where: { id: userId },
+        select: publicUserSelect,
+      }),
+      () => prisma.user.findUnique({
+        where: { id: userId },
+        select: publicUserBaseSelect,
+      }),
+    );
 
     if (!targetUser) {
       res.status(404).json({ success: false, message: 'User not found' });
