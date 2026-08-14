@@ -1,42 +1,16 @@
 {
   "version": 2,
-  "builds": [
+  "installCommand": "npm --prefix backend install && npm --prefix frontend install",
+  "buildCommand": "npm --prefix backend run build && npm --prefix frontend run build",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
     {
-      "src": "backend/api/index.ts",
-      "use": "@vercel/node"
+      "source": "/uploads/(.*)",
+      "destination": "/api/uploads/$1"
     },
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/backend/api/index.ts"
-    },
-    {
-      "src": "/uploads/(.*)",
-      "dest": "/backend/api/index.ts"
-    },
-    {
-      "src": "/assets/(.*)",
-      "dest": "/frontend/dist/assets/$1"
-    },
-    {
-      "src": "/favicon.svg",
-      "dest": "/frontend/dist/favicon.svg"
-    },
-    {
-      "src": "/icons.svg",
-      "dest": "/frontend/dist/icons.svg"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/frontend/dist/index.html"
+      "source": "/((?!api/.*|assets/.*|favicon.svg|icons.svg|404.html).*)",
+      "destination": "/index.html"
     }
   ]
 }
